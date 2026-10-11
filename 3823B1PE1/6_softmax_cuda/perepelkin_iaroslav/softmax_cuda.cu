@@ -52,10 +52,11 @@ __global__ void softmaxKernel(const float* __restrict__ input, float* __restrict
         __syncthreads();
     }
     const float row_sum = s_reduce[0];
+    const float inv_sum = 1.0f / row_sum;
 
     // Normalize and write to global memory
     for (int i = tid; i < cols; i += kBlockSize) {
-        row_out[i] = exp2f((row_in[i] - row_max) * kLog2e) / row_sum;
+        row_out[i] = exp2f((row_in[i] - row_max) * kLog2e) * inv_sum;
     }
 }
 
@@ -82,7 +83,6 @@ std::vector<float> SoftmaxCUDA(const std::vector<float>& input, int row_count) {
 
     cudaMemcpyAsync(d_in, input.data(), bytes, cudaMemcpyHostToDevice);
 
-    // 1 block processes 1 entire row
     softmaxKernel<<<row_count, kBlockSize>>>(d_in, d_out, cols);
 
     std::vector<float> result(size);
