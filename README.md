@@ -423,6 +423,7 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 ## 1_gelu_omp (134217728 elements)
 |Group|Name|Result|Rank|
 |-----|----|------|----|
+|3823B1FI1|dorofeev_ivan|0.1488|4|
 |**FAST**|**FAST**|**0.1741**|**-**|
 |3823B1PE1|rusakova_aleksandra|0.2258|3|
 |3823B1PE4|remizov_kirill|0.2275|3|
@@ -600,9 +601,10 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 ## 3823B1FI1
 |Group|Name|Passed|Score|
 |-----|----|------|-----|
-|3823B1FI1|kosolapov_vitaliy|1/8|61|
-|3823B1FI1|krykov_egor|2/8|123|
-|3823B1FI1|zenin_anton|4/8|256|
+|3823B1FI1|dorofeev_ivan|1/8|61|
+|3823B1FI1|kosolapov_vitaliy|1/8|60|
+|3823B1FI1|krykov_egor|2/8|122|
+|3823B1FI1|zenin_anton|4/8|255|
 
 Passed: 0
 
