@@ -4,7 +4,7 @@
 #include <string>
 
 namespace {
-constexpr int kThreads = 512;
+constexpr int kThreads = 256;
 
 __global__ void SoftmaxKernel(const float* input, float* output, int rows, int cols) {
     const int row = blockIdx.x;
@@ -12,7 +12,7 @@ __global__ void SoftmaxKernel(const float* input, float* output, int rows, int c
     extern __shared__ float shared[];
     float* max_values = shared;
     float* sums = shared + blockDim.x;
-    float local_max = -CUDART_INF_F;
+    float local_max = -3.402823466e+38F;
     for (int col = threadIdx.x; col < cols; col += blockDim.x)
         local_max = fmaxf(local_max, input[row * cols + col]);
     max_values[threadIdx.x] = local_max;
@@ -48,18 +48,21 @@ std::vector<float> SoftmaxCUDA(const std::vector<float>& input, int row_count) {
     std::vector<float> output(input.size());
     if (input.empty()) return output;
     const std::size_t bytes = input.size() * sizeof(float);
-    static float* workspace = nullptr;
-    static std::size_t capacity = 0;
-    if (bytes > capacity) {
-        if (workspace) CheckCuda(cudaFree(workspace), "cudaFree(workspace)");
-        CheckCuda(cudaMalloc(&workspace, 2 * bytes), "cudaMalloc(workspace)");
-        capacity = bytes;
+    float* device_input = nullptr;
+    float* device_output = nullptr;
+    CheckCuda(cudaMalloc(&device_input, bytes), "cudaMalloc(input)");
+    try {
+        CheckCuda(cudaMalloc(&device_output, bytes), "cudaMalloc(output)");
+        CheckCuda(cudaMemcpy(device_input, input.data(), bytes, cudaMemcpyHostToDevice), "copy input");
+        SoftmaxKernel<<<row_count, kThreads, 2 * kThreads * sizeof(float)>>>(device_input, device_output, row_count, cols);
+        CheckCuda(cudaGetLastError(), "SoftmaxKernel launch");
+        CheckCuda(cudaMemcpy(output.data(), device_output, bytes, cudaMemcpyDeviceToHost), "copy output");
+    } catch (...) {
+        cudaFree(device_output);
+        cudaFree(device_input);
+        throw;
     }
-    float* device_input = workspace;
-    float* device_output = workspace + capacity / sizeof(float);
-    CheckCuda(cudaMemcpy(device_input, input.data(), bytes, cudaMemcpyHostToDevice), "copy input");
-    SoftmaxKernel<<<row_count, kThreads, 2 * kThreads * sizeof(float)>>>(device_input, device_output, row_count, cols);
-    CheckCuda(cudaGetLastError(), "SoftmaxKernel launch");
-    CheckCuda(cudaMemcpy(output.data(), device_output, bytes, cudaMemcpyDeviceToHost), "copy output");
+    CheckCuda(cudaFree(device_output), "cudaFree(output)");
+    CheckCuda(cudaFree(device_input), "cudaFree(input)");
     return output;
 }
