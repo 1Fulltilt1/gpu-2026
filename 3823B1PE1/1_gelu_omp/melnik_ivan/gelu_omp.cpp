@@ -6,11 +6,11 @@
 std::vector<float> GeluOMP(const std::vector<float>& input)
 {
     const std::size_t n = input.size();
+    std::vector<float> result(n);
+
     if (n == 0) {
         return result;
     }
-
-    std::vector<float> result(n);
 
     const float* __restrict__ in = input.data();
     float* __restrict__ out = result.data();
