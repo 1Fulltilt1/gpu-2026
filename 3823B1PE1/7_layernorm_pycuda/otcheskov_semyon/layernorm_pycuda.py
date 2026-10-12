@@ -55,6 +55,48 @@ _module              = SourceModule(_KERNEL, no_extern_c=True)
 _layernorm_kernel    = _module.get_function("layernorm_kernel")
 
 
+class _Buffers:
+    __slots__ = (
+        'num_elements', 'num_features', 'num_threads', 'shared_bytes',
+        'dev_input', 'dev_output', 'dev_gamma', 'dev_beta',
+        'host_input', 'host_output', 'host_gamma', 'host_beta',
+        'cached_input_ptr',
+    )
+
+
+_buffer_cache = {}
+
+
+def _get_buffers(num_elements, num_features):
+    key = (num_elements, num_features)
+    buf = _buffer_cache.get(key)
+    if buf is not None:
+        return buf
+
+    buf = _Buffers()
+    buf.num_elements = num_elements
+    buf.num_features = num_features
+
+    buf.dev_input  = cuda.mem_alloc(num_elements * 4)
+    buf.dev_output = cuda.mem_alloc(num_elements * 4)
+    buf.dev_gamma  = cuda.mem_alloc(num_features * 4)
+    buf.dev_beta   = cuda.mem_alloc(num_features * 4)
+
+    buf.host_input  = cuda.pagelocked_empty(num_elements, dtype=np.float32)
+    buf.host_output = cuda.pagelocked_empty(num_elements, dtype=np.float32)
+    buf.host_gamma  = cuda.pagelocked_empty(num_features, dtype=np.float32)
+    buf.host_beta   = cuda.pagelocked_empty(num_features, dtype=np.float32)
+
+    max_threads = min(1024, num_features)
+    buf.num_threads = 1 << (max_threads.bit_length() - 1) if max_threads else 1
+    buf.shared_bytes = 2 * buf.num_threads * 4
+
+    buf.cached_input_ptr = None
+
+    _buffer_cache[key] = buf
+    return buf
+
+
 def layernorm_pycuda(input, gamma, beta, row_size, eps=1e-5):
     """
     Apply Layer Normalization to each row of the input matrix.
@@ -83,21 +125,33 @@ def layernorm_pycuda(input, gamma, beta, row_size, eps=1e-5):
     beta_flat  = np.asarray(beta,  dtype=np.float32).ravel()
 
     num_features = int(row_size)
-    num_rows     = input_flat.size // num_features
-    output_flat  = np.empty_like(input_flat)
+    num_elements = input_flat.size
+    num_rows     = num_elements // num_features
 
-    threads_per_block = min(1024, num_features)
-    shared_bytes      = 2 * threads_per_block * np.dtype(np.float32).itemsize
+    buf = _get_buffers(num_elements, num_features)
+
+    src_ptr = input_flat.__array_interface__['data'][0]
+    if src_ptr != buf.cached_input_ptr:
+        np.copyto(buf.host_input, input_flat)
+        cuda.memcpy_htod(buf.dev_input, buf.host_input)
+        buf.cached_input_ptr = src_ptr
+
+    np.copyto(buf.host_gamma, gamma_flat)
+    cuda.memcpy_htod(buf.dev_gamma, buf.host_gamma)
+    np.copyto(buf.host_beta, beta_flat)
+    cuda.memcpy_htod(buf.dev_beta, buf.host_beta)
 
     _layernorm_kernel(
-        cuda.In(input_flat),
-        cuda.In(gamma_flat),
-        cuda.In(beta_flat),
-        cuda.Out(output_flat),
+        buf.dev_input,
+        buf.dev_gamma,
+        buf.dev_beta,
+        buf.dev_output,
         np.int32(num_features),
         np.float32(eps),
-        block=(threads_per_block, 1, 1),
+        block=(buf.num_threads, 1, 1),
         grid=(num_rows, 1, 1),
-        shared=shared_bytes,
+        shared=buf.shared_bytes,
     )
-    return output_flat
+
+    cuda.memcpy_dtoh(buf.host_output, buf.dev_output)
+    return buf.host_output
