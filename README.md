@@ -564,7 +564,7 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 |3823B1PE4|dilshodov_adkham|0.2476|1|
 |3823B1PE2|klimenko_vladislav|0.2685|1|
 |**REF**|**REF**|**0.2707**|**-**|
-|3823B1PE2|zorin_danila_artemovich|BUILD FAILED|-|
+|3823B1PE2|zorin_danila_artemovich|0.2745|2|
 |3823B1PE2|kotelnikova_anastasia|BUILD FAILED|-|
 
 ## 7_layernorm_pycuda (8192x16384 elements)
@@ -639,9 +639,9 @@ Passed: 4
 |3823B1PE2|sinev_artem|2/8|122|
 |3823B1PE2|vasiliev_mikhail|4/8|240|
 |3823B1PE2|viderman_aleksandra|2/8|116|
-|3823B1PE2|zorin_danila_artemovich|7/8|418|
+|3823B1PE2|zorin_danila_artemovich|**8/8**|**480**|
 
-Passed: 1
+Passed: 2
 
 ## 3823B1PE3
 |Group|Name|Passed|Score|
@@ -664,7 +664,7 @@ Passed: 2
 
 Passed: 0
 
-**Total Passed: 7**
+**Total Passed: 8**
 
 ---
 *Maximum Score: 512 (64 per task)*
