@@ -1,0 +1,403 @@
+/home/crazyproger/sandbox/gpu-2026/3823B1PE2/6_softmax_cuda/kotelnikova_anastasia/softmax_cuda.cu(1): error: expected a declaration
+  %%writefile softmax_cuda.cu
+  ^
+
+/usr/include/c++/11/bits/exception.h(81): error: expected a declaration
+  }
+  ^
+
+/usr/include/c++/11/new(70): error: invalid specifier outside a class declaration
+      virtual const char* what() const throw();
+      ^
+
+/usr/include/c++/11/new(70): error: a type qualifier is not allowed on a nonmember function
+      virtual const char* what() const throw();
+                                 ^
+
+/usr/include/c++/11/new(71): error: expected a declaration
+    };
+    ^
+
+/usr/include/c++/11/new(74): error: not a class or struct name
+    class bad_array_new_length : public bad_alloc
+                                        ^
+
+/usr/include/c++/11/new(113): error: expected a declaration
+  }
+  ^
+
+/usr/include/c++/11/new(140): error: namespace "std" has no member "nothrow_t"
+  [[__nodiscard__]] void* operator new(std::size_t, const std::nothrow_t&) noexcept
+                                                               ^
+
+/usr/include/c++/11/new(142): error: namespace "std" has no member "nothrow_t"
+  [[__nodiscard__]] void* operator new[](std::size_t, const std::nothrow_t&) noexcept
+                                                                 ^
+
+/usr/include/c++/11/new(144): error: namespace "std" has no member "nothrow_t"
+  void operator delete(void*, const std::nothrow_t&) noexcept
+                                         ^
+
+/usr/include/c++/11/new(146): error: namespace "std" has no member "nothrow_t"
+  void operator delete[](void*, const std::nothrow_t&) noexcept
+                                           ^
+
+/usr/include/c++/11/new(151): error: namespace "std" has no member "nothrow_t"
+  [[__nodiscard__]] void* operator new(std::size_t, std::align_val_t, const std::nothrow_t&)
+                                                                                 ^
+
+/usr/include/c++/11/new(155): error: namespace "std" has no member "nothrow_t"
+  void operator delete(void*, std::align_val_t, const std::nothrow_t&)
+                                                           ^
+
+/usr/include/c++/11/new(159): error: namespace "std" has no member "nothrow_t"
+  [[__nodiscard__]] void* operator new[](std::size_t, std::align_val_t, const std::nothrow_t&)
+                                                                                   ^
+
+/usr/include/c++/11/new(163): error: namespace "std" has no member "nothrow_t"
+  void operator delete[](void*, std::align_val_t, const std::nothrow_t&)
+                                                             ^
+
+/usr/include/c++/11/new(183): error: expected a declaration
+  }
+  ^
+
+/usr/include/c++/11/ext/new_allocator.h(82): error: function "new_allocator" is not a type name
+        new_allocator(const new_allocator&) noexcept { }
+                            ^
+
+/usr/include/c++/11/ext/new_allocator.h(86): error: overloaded function "new_allocator" is not a template
+   new_allocator(const new_allocator<_Tp1>&) noexcept { }
+                       ^
+
+/usr/include/c++/11/ext/new_allocator.h(89): error: expected a declaration
+        ~new_allocator() noexcept { }
+        ^
+
+/usr/include/c++/11/ext/new_allocator.h(128): error: expected a declaration
+        }
+        ^
+
+/usr/include/c++/11/ext/new_allocator.h(208): error: expected a declaration
+  }
+  ^
+
+/usr/include/c++/11/bits/allocator.h(96): error: identifier "true_type" is undefined
+   = true_type;
+     ^
+
+/usr/include/c++/11/bits/allocator.h(113): error: expected a declaration
+      };
+      ^
+
+/usr/include/c++/11/bits/allocator.h(124): error: __allocator_base is not a template
+      class allocator : public __allocator_base<_Tp>
+                               ^
+
+/usr/include/c++/11/bits/allocator.h(146): error: identifier "true_type" is undefined
+        using propagate_on_container_move_assignment = true_type;
+                                                       ^
+
+/usr/include/c++/11/bits/allocator.h(150): error: identifier "true_type" is undefined
+   = true_type;
+     ^
+
+/usr/include/c++/11/bits/allocator.h(160): error: __allocator_base is not a template
+        : __allocator_base<_Tp>(__a) { }
+          ^
+
+/usr/include/c++/11/bits/allocator.h(304): error: identifier "__or_" is undefined
+      = __or_<is_copy_constructible<typename _Tp::value_type>,
+        ^
+
+/usr/include/c++/11/bits/allocator.h(304): error: identifier "is_copy_constructible" is undefined
+      = __or_<is_copy_constructible<typename _Tp::value_type>,
+              ^
+
+/usr/include/c++/11/bits/allocator.h(304): error: type name is not allowed
+      = __or_<is_copy_constructible<typename _Tp::value_type>,
+                                    ^
+
+/usr/include/c++/11/bits/allocator.h(304): error: expected a declaration
+      = __or_<is_copy_constructible<typename _Tp::value_type>,
+                                                             ^
+
+/usr/include/c++/11/bits/allocator.h(304): error: expected a ";"
+      = __or_<is_copy_constructible<typename _Tp::value_type>,
+                                                             ^
+
+/usr/include/c++/11/bits/allocator.h(310): error: a template argument list is not allowed in a declaration of a primary template
+      struct __shrink_to_fit_aux<_Tp, true>
+             ^
+
+/usr/include/c++/11/bits/allocator.h(333): error: expected a declaration
+  }
+  ^
+
+/usr/include/c++/11/bits/stl_construct.h(120): error: expected a declaration
+      }
+      ^
+
+/usr/include/c++/11/bits/stl_construct.h(163): error: namespace "std" has no member "_Destroy"
+       std::_Destroy(std::__addressof(*__first));
+            ^
+
+/usr/include/c++/11/bits/stl_construct.h(184): error: iterator_traits is not a template
+        typedef typename iterator_traits<_ForwardIterator>::value_type
+                         ^
+
+/usr/include/c++/11/bits/stl_construct.h(188): error: identifier "is_destructible" is undefined
+        static_assert(is_destructible<_Value_type>::value,
+                      ^
+
+/usr/include/c++/11/bits/stl_construct.h(188): error: type name is not allowed
+        static_assert(is_destructible<_Value_type>::value,
+                                      ^
+
+/usr/include/c++/11/bits/stl_construct.h(188): error: the global scope has no "value"
+        static_assert(is_destructible<_Value_type>::value,
+                                                    ^
+
+/usr/include/c++/11/bits/stl_construct.h(195): error: namespace "std" has no member "_Destroy_aux"
+        std::_Destroy_aux<__has_trivial_destructor(_Value_type)>::
+             ^
+
+/usr/include/c++/11/bits/stl_construct.h(196): error: the global scope has no "__destroy"
+   __destroy(__first, __last);
+   ^
+
+/usr/include/c++/11/bits/stl_construct.h(207): error: namespace "std" has no member "_Destroy"
+       std::_Destroy(std::__addressof(*__first));
+            ^
+
+/usr/include/c++/11/bits/stl_construct.h(233): error: iterator_traits is not a template
+        typedef typename iterator_traits<_ForwardIterator>::value_type
+                         ^
+
+/usr/include/c++/11/bits/stl_construct.h(237): error: identifier "is_destructible" is undefined
+        static_assert(is_destructible<_Value_type>::value,
+                      ^
+
+/usr/include/c++/11/bits/stl_construct.h(237): error: type name is not allowed
+        static_assert(is_destructible<_Value_type>::value,
+                                      ^
+
+/usr/include/c++/11/bits/stl_construct.h(237): error: the global scope has no "value"
+        static_assert(is_destructible<_Value_type>::value,
+                                                    ^
+
+/usr/include/c++/11/bits/stl_construct.h(244): error: namespace "std" has no member "_Destroy_n_aux"
+        return std::_Destroy_n_aux<__has_trivial_destructor(_Value_type)>::
+                    ^
+
+/usr/include/c++/11/bits/stl_construct.h(245): error: the global scope has no "__destroy_n"
+   __destroy_n(__first, __count);
+   ^
+
+/usr/include/c++/11/bits/stl_construct.h(253): error: namespace "std" has no member "_Destroy"
+        std::_Destroy(__first, __last);
+             ^
+
+/usr/include/c++/11/bits/stl_construct.h(260): error: namespace "std" has no member "_Destroy_n"
+        return std::_Destroy_n(__first, __count);
+                    ^
+
+/usr/include/c++/11/bits/stl_construct.h(265): error: expected a declaration
+  }
+  ^
+
+/usr/include/c++/11/bits/alloc_traits.h(76): error: expected a declaration
+    };
+    ^
+
+/usr/include/c++/11/bits/alloc_traits.h(80): error: a class or namespace qualified name is required
+        = typename __allocator_traits_base::template __rebind<_Alloc, _Up>::type;
+                   ^
+
+/usr/include/c++/11/bits/alloc_traits.h(80): error: __rebind is not a template
+        = typename __allocator_traits_base::template __rebind<_Alloc, _Up>::type;
+                                                     ^
+
+/usr/include/c++/11/bits/alloc_traits.h(80): error: expected a ";"
+        = typename __allocator_traits_base::template __rebind<_Alloc, _Up>::type;
+                                          ^
+
+/usr/include/c++/11/bits/alloc_traits.h(90): error: not a class or struct name
+      struct allocator_traits : __allocator_traits_base
+                                ^
+
+/usr/include/c++/11/bits/alloc_traits.h(102): error: __detected_or_t is not a template
+        using pointer = __detected_or_t<value_type*, __pointer, _Alloc>;
+                        ^
+
+/usr/include/c++/11/bits/alloc_traits.h(102): error: identifier "__pointer" is undefined
+        using pointer = __detected_or_t<value_type*, __pointer, _Alloc>;
+                                                     ^
+
+/usr/include/c++/11/bits/alloc_traits.h(109): error: pointer_traits is not a template
+     using type = typename pointer_traits<pointer>::template rebind<_Tp>;
+                           ^
+
+/usr/include/c++/11/bits/alloc_traits.h(109): error: expected a ";"
+     using type = typename pointer_traits<pointer>::template rebind<_Tp>;
+                                                                       ^
+
+/usr/include/c++/11/bits/alloc_traits.h(113): error: __void_t is not a template
+   struct _Ptr<_Func, _Tp, __void_t<_Func<_Alloc>>>
+                           ^
+
+/usr/include/c++/11/bits/alloc_traits.h(121): error: pointer_traits is not a template
+   { using type = typename pointer_traits<_PtrT>::difference_type; };
+                           ^
+
+/usr/include/c++/11/bits/alloc_traits.h(124): error: __void_t is not a template
+   struct _Diff<_A2, _PtrT, __void_t<typename _A2::difference_type>>
+                            ^
+
+/usr/include/c++/11/bits/alloc_traits.h(129): error: make_unsigned is not a template
+   struct _Size : make_unsigned<_DiffT> { };
+                  ^
+
+/usr/include/c++/11/bits/alloc_traits.h(132): error: __void_t is not a template
+   struct _Size<_A2, _DiffT, __void_t<typename _A2::size_type>>
+                             ^
+
+/usr/include/c++/11/bits/alloc_traits.h(142): error: identifier "__c_pointer" is undefined
+        using const_pointer = typename _Ptr<__c_pointer, const value_type>::type;
+                                            ^
+
+/usr/include/c++/11/bits/alloc_traits.h(183): error: __detected_or_t is not a template
+   = __detected_or_t<false_type, __pocca, _Alloc>;
+     ^
+
+/usr/include/c++/11/bits/alloc_traits.h(183): error: identifier "false_type" is undefined
+   = __detected_or_t<false_type, __pocca, _Alloc>;
+                     ^
+
+/usr/include/c++/11/bits/alloc_traits.h(192): error: __detected_or_t is not a template
+   = __detected_or_t<false_type, __pocma, _Alloc>;
+     ^
+
+/usr/include/c++/11/bits/alloc_traits.h(201): error: __detected_or_t is not a template
+   = __detected_or_t<false_type, __pocs, _Alloc>;
+     ^
+
+/usr/include/c++/11/bits/alloc_traits.h(210): error: __detected_or_t is not a template
+   = __detected_or_t<typename is_empty<_Alloc>::type, __equal, _Alloc>;
+     ^
+
+/usr/include/c++/11/bits/alloc_traits.h(210): error: is_empty is not a template
+   = __detected_or_t<typename is_empty<_Alloc>::type, __equal, _Alloc>;
+                              ^
+
+/usr/include/c++/11/bits/alloc_traits.h(210): error: type name is not allowed
+   = __detected_or_t<typename is_empty<_Alloc>::type, __equal, _Alloc>;
+                     ^
+
+/usr/include/c++/11/bits/alloc_traits.h(235): error: identifier "true_type" is undefined
+       static true_type __test(int);
+              ^
+
+/usr/include/c++/11/bits/alloc_traits.h(238): error: "false_type" is not a type name
+       static false_type __test(...);
+              ^
+
+/usr/include/c++/11/bits/alloc_traits.h(248): error: _Require is not a template
+   static constexpr _Require<__has_construct<_Tp, _Args...>>
+                    ^
+
+/usr/include/c++/11/bits/alloc_traits.h(255): error: _Require is not a template
+   _Require<__and_<__not_<__has_construct<_Tp, _Args...>>,
+   ^
+
+/usr/include/c++/11/bits/alloc_traits.h(255): error: identifier "__and_" is undefined
+   _Require<__and_<__not_<__has_construct<_Tp, _Args...>>,
+            ^
+
+/usr/include/c++/11/bits/alloc_traits.h(255): error: identifier "__not_" is undefined
+   _Require<__and_<__not_<__has_construct<_Tp, _Args...>>,
+                   ^
+
+/usr/include/c++/11/bits/alloc_traits.h(255): error: type name is not allowed
+   _Require<__and_<__not_<__has_construct<_Tp, _Args...>>,
+                          ^
+
+/usr/include/c++/11/bits/alloc_traits.h(255): error: expected an identifier
+   _Require<__and_<__not_<__has_construct<_Tp, _Args...>>,
+                                                         ^
+
+/usr/include/c++/11/bits/alloc_traits.h(256): error: is_constructible is not a template
+            is_constructible<_Tp, _Args...>>>
+            ^
+
+/usr/include/c++/11/bits/alloc_traits.h(256): error: expected a ";"
+            is_constructible<_Tp, _Args...>>>
+                                          ^
+
+/usr/include/c++/11/bits/alloc_traits.h(438): error: identifier "false_type" is undefined
+        using propagate_on_container_copy_assignment = false_type;
+                                                       ^
+
+/usr/include/c++/11/bits/alloc_traits.h(441): error: identifier "true_type" is undefined
+        using propagate_on_container_move_assignment = true_type;
+                                                       ^
+
+/usr/include/c++/11/bits/alloc_traits.h(444): error: identifier "false_type" is undefined
+        using propagate_on_container_swap = false_type;
+                                            ^
+
+/usr/include/c++/11/bits/alloc_traits.h(447): error: identifier "true_type" is undefined
+        using is_always_equal = true_type;
+                                ^
+
+/usr/include/c++/11/bits/alloc_traits.h(532): error: identifier "is_nothrow_destructible" is undefined
+   noexcept(is_nothrow_destructible<_Up>::value)
+            ^
+
+/usr/include/c++/11/bits/alloc_traits.h(532): error: type name is not allowed
+   noexcept(is_nothrow_destructible<_Up>::value)
+                                    ^
+
+/usr/include/c++/11/bits/alloc_traits.h(532): error: the global scope has no "value"
+   noexcept(is_nothrow_destructible<_Up>::value)
+                                          ^
+
+/usr/include/c++/11/bits/alloc_traits.h(595): error: identifier "false_type" is undefined
+        using propagate_on_container_copy_assignment = false_type;
+                                                       ^
+
+/usr/include/c++/11/bits/alloc_traits.h(598): error: identifier "true_type" is undefined
+        using propagate_on_container_move_assignment = true_type;
+                                                       ^
+
+/usr/include/c++/11/bits/alloc_traits.h(601): error: identifier "false_type" is undefined
+        using propagate_on_container_swap = false_type;
+                                            ^
+
+/usr/include/c++/11/bits/alloc_traits.h(604): error: identifier "true_type" is undefined
+        using is_always_equal = true_type;
+                                ^
+
+/usr/include/c++/11/bits/alloc_traits.h(647): error: identifier "is_nothrow_destructible" is undefined
+   noexcept(is_nothrow_destructible<_Up>::value)
+            ^
+
+/usr/include/c++/11/bits/alloc_traits.h(647): error: type name is not allowed
+   noexcept(is_nothrow_destructible<_Up>::value)
+                                    ^
+
+/usr/include/c++/11/bits/alloc_traits.h(647): error: the global scope has no "value"
+   noexcept(is_nothrow_destructible<_Up>::value)
+                                          ^
+
+/usr/include/c++/11/bits/alloc_traits.h(635): error: namespace "std" has no member "_Construct"
+   { std::_Construct(__p, std::forward<_Args>(__args)...); }
+          ^
+
+/usr/include/c++/11/bits/alloc_traits.h(648): error: namespace "std" has no member "_Destroy"
+   { std::_Destroy(__p); }
+          ^
+
+Error limit reached.
+100 errors detected in the compilation of "/home/crazyproger/sandbox/gpu-2026/3823B1PE2/6_softmax_cuda/kotelnikova_anastasia/softmax_cuda.cu".
+Compilation terminated.
