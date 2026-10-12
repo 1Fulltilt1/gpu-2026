@@ -579,6 +579,7 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 |3823B1PE1|rusakova_aleksandra|0.2386|2|
 |3823B1PE2|klimenko_vladislav|0.2468|1|
 |3823B1PE1|redkina_alina|0.2500|1|
+|3823B1PE3|bortsova_angelina|0.2561|2|
 |**REF**|**REF**|**0.3289**|**-**|
 
 # Tasks Done
@@ -632,11 +633,11 @@ Passed: 1
 |Group|Name|Passed|Score|
 |-----|----|------|-----|
 |3823B1PE3|batkov_filipp|3/8|180|
-|3823B1PE3|bortsova_angelina|7/8|427|
+|3823B1PE3|bortsova_angelina|**8/8**|**489**|
 |3823B1PE3|dergachev_arseniy|**8/8**|**508**|
 |3823B1PE3|marin_lev|5/8|305|
 
-Passed: 1
+Passed: 2
 
 ## 3823B1PE4
 |Group|Name|Passed|Score|
@@ -648,7 +649,7 @@ Passed: 1
 
 Passed: 0
 
-**Total Passed: 4**
+**Total Passed: 5**
 
 ---
 *Maximum Score: 512 (64 per task)*
