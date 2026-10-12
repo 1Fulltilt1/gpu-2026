@@ -1,4 +1,4 @@
-/home/crazyproger/sandbox/gpu-2026/3823B1PE2/6_softmax_cuda/zorin_danila_artemovich/softmax_cuda.cu(28): error: identifier "CUDART_INF_F" is undefined
+/home/crazyproger/sandbox/gpu-2026/3823B1PE2/6_softmax_cuda/zorin_danila_artemovich/softmax_cuda.cu(15): error: identifier "CUDART_INF_F" is undefined
       float local_max = -CUDART_INF_F;
                          ^
 
