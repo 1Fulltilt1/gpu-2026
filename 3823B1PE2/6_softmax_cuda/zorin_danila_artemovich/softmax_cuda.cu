@@ -5,51 +5,33 @@
 
 namespace {
 constexpr int kThreads = 512;
-constexpr int kWarps = kThreads / 32;
-
-__device__ float WarpMax(float value) {
-    for (int offset = 16; offset > 0; offset >>= 1)
-        value = fmaxf(value, __shfl_down_sync(0xffffffff, value, offset));
-    return value;
-}
-
-__device__ float WarpSum(float value) {
-    for (int offset = 16; offset > 0; offset >>= 1)
-        value += __shfl_down_sync(0xffffffff, value, offset);
-    return value;
-}
 
 __global__ void SoftmaxKernel(const float* input, float* output, int rows, int cols) {
     const int row = blockIdx.x;
     if (row >= rows) return;
     extern __shared__ float shared[];
     float* max_values = shared;
-    float* sums = shared + kWarps;
+    float* sums = shared + blockDim.x;
     float local_max = -CUDART_INF_F;
     for (int col = threadIdx.x; col < cols; col += blockDim.x)
         local_max = fmaxf(local_max, input[row * cols + col]);
-    local_max = WarpMax(local_max);
-    if ((threadIdx.x & 31) == 0) max_values[threadIdx.x / 32] = local_max;
+    max_values[threadIdx.x] = local_max;
     __syncthreads();
-    if (threadIdx.x < 32) {
-        local_max = threadIdx.x < kWarps ? max_values[threadIdx.x] : -CUDART_INF_F;
-        local_max = WarpMax(local_max);
-        if (threadIdx.x == 0) max_values[0] = local_max;
+    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
+        if (threadIdx.x < stride)
+            max_values[threadIdx.x] = fmaxf(max_values[threadIdx.x], max_values[threadIdx.x + stride]);
+        __syncthreads();
     }
-    __syncthreads();
     const float row_max = max_values[0];
     float local_sum = 0.0f;
     for (int col = threadIdx.x; col < cols; col += blockDim.x)
         local_sum += expf(input[row * cols + col] - row_max);
-    local_sum = WarpSum(local_sum);
-    if ((threadIdx.x & 31) == 0) sums[threadIdx.x / 32] = local_sum;
+    sums[threadIdx.x] = local_sum;
     __syncthreads();
-    if (threadIdx.x < 32) {
-        local_sum = threadIdx.x < kWarps ? sums[threadIdx.x] : 0.0f;
-        local_sum = WarpSum(local_sum);
-        if (threadIdx.x == 0) sums[0] = local_sum;
+    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
+        if (threadIdx.x < stride) sums[threadIdx.x] += sums[threadIdx.x + stride];
+        __syncthreads();
     }
-    __syncthreads();
     const float denominator = sums[0];
     for (int col = threadIdx.x; col < cols; col += blockDim.x)
         output[row * cols + col] = expf(input[row * cols + col] - row_max) / denominator;
@@ -76,7 +58,7 @@ std::vector<float> SoftmaxCUDA(const std::vector<float>& input, int row_count) {
     float* device_input = workspace;
     float* device_output = workspace + capacity / sizeof(float);
     CheckCuda(cudaMemcpy(device_input, input.data(), bytes, cudaMemcpyHostToDevice), "copy input");
-    SoftmaxKernel<<<row_count, kThreads, 2 * kWarps * sizeof(float)>>>(device_input, device_output, row_count, cols);
+    SoftmaxKernel<<<row_count, kThreads, 2 * kThreads * sizeof(float)>>>(device_input, device_output, row_count, cols);
     CheckCuda(cudaGetLastError(), "SoftmaxKernel launch");
     CheckCuda(cudaMemcpy(output.data(), device_output, bytes, cudaMemcpyDeviceToHost), "copy output");
     return output;
