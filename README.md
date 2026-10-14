@@ -564,6 +564,7 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 ## 6_softmax_cuda (8192x16384 elements)
 |Group|Name|Result|Rank|
 |-----|----|------|----|
+|3823B1FI1|dorofeev_ivan|0.1687|1|
 |**FAST**|**FAST**|**0.2142**|**-**|
 |3823B1PE1|otcheskov_semyon|0.2187|4|
 |3823B1PE1|perepelkin_iaroslav|0.2351|3|
@@ -614,7 +615,7 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 ## 3823B1FI1
 |Group|Name|Passed|Score|
 |-----|----|------|-----|
-|3823B1FI1|dorofeev_ivan|5/8|312|
+|3823B1FI1|dorofeev_ivan|6/8|376|
 |3823B1FI1|kosolapov_vitaliy|1/8|60|
 |3823B1FI1|krykov_egor|2/8|121|
 |3823B1FI1|zenin_anton|5/8|315|
