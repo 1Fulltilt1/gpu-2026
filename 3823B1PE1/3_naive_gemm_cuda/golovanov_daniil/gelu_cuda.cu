@@ -1,112 +1,67 @@
 #include "naive_gemm_cuda.h"
 
 #include <cuda_runtime.h>
-#include <cstddef>
+
 #include <stdexcept>
 #include <string>
 
 namespace {
 
-constexpr int kTile = 32;
-
-__global__ void naive_gemm_kernel_tiled(const float* __restrict__ a,
-                                        const float* __restrict__ b,
-                                        float* __restrict__ c,
-                                        int n) {
-    __shared__ float As[kTile][kTile];
-    __shared__ float Bs[kTile][kTile];
-
-    const int tx = threadIdx.x;
-    const int ty = threadIdx.y;
-    const int row = blockIdx.y * kTile + ty;
-    const int col = blockIdx.x * kTile + tx;
-
-    float acc = 0.0f;
-
-    for (int t = 0; t < n; t += kTile) {
-        if (row < n && (t + tx) < n)
-            As[ty][tx] = a[static_cast<std::size_t>(row) * n + t + tx];
-        else
-            As[ty][tx] = 0.0f;
-
-        if ((t + ty) < n && col < n)
-            Bs[ty][tx] = b[static_cast<std::size_t>(t + ty) * n + col];
-        else
-            Bs[ty][tx] = 0.0f;
-
-        __syncthreads();
-
-        #pragma unroll
-        for (int k = 0; k < kTile; ++k) {
-            acc += As[ty][k] * Bs[k][tx];
-        }
-
-        __syncthreads();
+__global__ void NaiveGemmKernel(const float* a, const float* b, float* c, int n) {
+    const int row = blockIdx.y * blockDim.y + threadIdx.y;
+    const int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if (row >= n || col >= n) {
+        return;
     }
 
-    if (row < n && col < n)
-        c[static_cast<std::size_t>(row) * n + col] = acc;
+    float sum = 0.0f;
+#pragma unroll 4
+    for (int k = 0; k < n; ++k) {
+        sum += a[row * n + k] * b[k * n + col];
+    }
+    c[row * n + col] = sum;
 }
 
-void check_cuda(cudaError_t err, const char* what) {
-    if (err != cudaSuccess) {
-        throw std::runtime_error(std::string(what) + ": " + cudaGetErrorString(err));
+void CheckCuda(cudaError_t error, const char* operation) {
+    if (error != cudaSuccess) {
+        throw std::runtime_error(std::string(operation) + ": " + cudaGetErrorString(error));
     }
 }
-
-struct DeviceBuffer {
-    float* ptr = nullptr;
-    std::size_t cap = 0;
-
-    void ensure(std::size_t n) {
-        if (n > cap) {
-            if (ptr) check_cuda(cudaFree(ptr), "cudaFree");
-            check_cuda(cudaMalloc(reinterpret_cast<void**>(&ptr), n * sizeof(float)),
-                       "cudaMalloc");
-            cap = n;
-        }
-    }
-
-    ~DeviceBuffer() {
-        if (ptr) cudaFree(ptr);
-    }
-};
 
 } // namespace
 
 std::vector<float> NaiveGemmCUDA(const std::vector<float>& a,
                                  const std::vector<float>& b,
                                  int n) {
-    const std::size_t total = static_cast<std::size_t>(n) * static_cast<std::size_t>(n);
-    std::vector<float> c(total);
-    if (total == 0) return c;
+    if (n < 0 || a.size() != static_cast<std::size_t>(n) * n ||
+        b.size() != static_cast<std::size_t>(n) * n) {
+        throw std::invalid_argument("matrices must have exactly n*n elements");
+    }
+    std::vector<float> c(a.size(), 0.0f);
+    if (n == 0) {
+        return c;
+    }
 
-    static DeviceBuffer d_a;
-    static DeviceBuffer d_b;
-    static DeviceBuffer d_c;
+    float *da = nullptr, *db = nullptr, *dc = nullptr;
+    const std::size_t bytes = a.size() * sizeof(float);
+    CheckCuda(cudaMalloc(&da, bytes), "cudaMalloc(A)");
+    try {
+        CheckCuda(cudaMalloc(&db, bytes), "cudaMalloc(B)");
+        CheckCuda(cudaMalloc(&dc, bytes), "cudaMalloc(C)");
+        CheckCuda(cudaMemcpy(da, a.data(), bytes, cudaMemcpyHostToDevice), "copy A");
+        CheckCuda(cudaMemcpy(db, b.data(), bytes, cudaMemcpyHostToDevice), "copy B");
 
-    d_a.ensure(total);
-    d_b.ensure(total);
-    d_c.ensure(total);
-
-    const std::size_t bytes = total * sizeof(float);
-
-    check_cuda(cudaMemcpyAsync(d_a.ptr, a.data(), bytes, cudaMemcpyHostToDevice, 0),
-               "cudaMemcpy a H2D");
-    check_cuda(cudaMemcpyAsync(d_b.ptr, b.data(), bytes, cudaMemcpyHostToDevice, 0),
-               "cudaMemcpy b H2D");
-
-    const dim3 block(kTile, kTile);
-    const dim3 grid((n + kTile - 1) / kTile, (n + kTile - 1) / kTile);
-
-    naive_gemm_kernel_tiled<<<grid, block, 0, 0>>>(d_a.ptr, d_b.ptr, d_c.ptr, n);
-
-    check_cuda(cudaGetLastError(), "naive_gemm_kernel_tiled launch");
-
-    check_cuda(cudaMemcpyAsync(c.data(), d_c.ptr, bytes, cudaMemcpyDeviceToHost, 0),
-               "cudaMemcpy c D2H");
-
-    check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize");
-
+        const dim3 block(16, 16);
+        const dim3 grid((n + block.x - 1) / block.x, (n + block.y - 1) / block.y);
+        NaiveGemmKernel<<<grid, block>>>(da, db, dc, n);
+        CheckCuda(cudaGetLastError(), "NaiveGemmKernel launch");
+        CheckCuda(cudaMemcpy(c.data(), dc, bytes, cudaMemcpyDeviceToHost), "copy C");
+    } catch (...) {
+        cudaFree(dc); cudaFree(db); cudaFree(da);
+        throw;
+    }
+    CheckCuda(cudaFree(dc), "cudaFree(C)");
+    CheckCuda(cudaFree(db), "cudaFree(B)");
+    CheckCuda(cudaFree(da), "cudaFree(A)");
     return c;
 }
