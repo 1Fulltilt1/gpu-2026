@@ -6,13 +6,56 @@
 
 namespace {
 
-constexpr int kThreads = 16;
+// Each thread computes a TILE x TILE block of C held entirely in registers.
+// Loading a whole float4 of A and of B per k-step with 4x4 reuse turns the
+// memory-bound naive algorithm into an FMA-bound one: per k-step a thread does
+// 4 + 4 vector loads and TILE * TILE * TILE = 64 FMAs.
+constexpr int kTile = 4;
+constexpr int kThreads = 16;                      // 16 x 16 threads per block
+constexpr int kBlockTile = kTile * kThreads;      // 64 x 64 block tile of C
 
-// Naive GEMM: one thread computes a single element of C.
-// C[row][col] = sum_k A[row][k] * B[k][col]
 __global__ void NaiveGemmKernel(const float* __restrict__ a,
                                 const float* __restrict__ b,
                                 float* __restrict__ c, int n) {
+    const int row0 = (blockIdx.y * blockDim.y + threadIdx.y) * kTile;
+    const int col0 = (blockIdx.x * blockDim.x + threadIdx.x) * kTile;
+
+    float acc[kTile][kTile] = {};
+
+    for (int k = 0; k < n; k += kTile) {
+        float4 av[kTile];
+#pragma unroll
+        for (int r = 0; r < kTile; ++r) {
+            av[r] = *reinterpret_cast<const float4*>(a + (row0 + r) * n + k);
+        }
+        float4 bv[kTile];
+#pragma unroll
+        for (int q = 0; q < kTile; ++q) {
+            bv[q] = *reinterpret_cast<const float4*>(b + (k + q) * n + col0);
+        }
+#pragma unroll
+        for (int r = 0; r < kTile; ++r) {
+#pragma unroll
+            for (int q = 0; q < kTile; ++q) {
+                acc[r][0] = fmaf(av[r].x, bv[q].x, acc[r][0]);
+                acc[r][1] = fmaf(av[r].y, bv[q].y, acc[r][1]);
+                acc[r][2] = fmaf(av[r].z, bv[q].z, acc[r][2]);
+                acc[r][3] = fmaf(av[r].w, bv[q].w, acc[r][3]);
+            }
+        }
+    }
+
+#pragma unroll
+    for (int r = 0; r < kTile; ++r) {
+        *reinterpret_cast<float4*>(c + (row0 + r) * n + col0) =
+            make_float4(acc[r][0], acc[r][1], acc[r][2], acc[r][3]);
+    }
+}
+
+// Fallback: one element per thread, no alignment assumptions.
+__global__ void GenericGemmKernel(const float* __restrict__ a,
+                                  const float* __restrict__ b,
+                                  float* __restrict__ c, int n) {
     const int col = blockIdx.x * blockDim.x + threadIdx.x;
     const int row = blockIdx.y * blockDim.y + threadIdx.y;
     if (row >= n || col >= n) {
@@ -46,8 +89,15 @@ std::vector<float> NaiveGemmCUDA(const std::vector<float>& a,
     cudaMemcpy(da, a.data(), bytes, cudaMemcpyHostToDevice);
     cudaMemcpy(db, b.data(), bytes, cudaMemcpyHostToDevice);
 
-    const int blocks = (n + kThreads - 1) / kThreads;
-    NaiveGemmKernel<<<dim3(blocks, blocks), dim3(kThreads, kThreads)>>>(da, db, dc, n);
+    if (n % kBlockTile == 0) {
+        const dim3 block(kThreads, kThreads);
+        const dim3 grid(n / kBlockTile, n / kBlockTile);
+        NaiveGemmKernel<<<grid, block>>>(da, db, dc, n);
+    } else {
+        constexpr int kFallback = 16;
+        const int blocks = (n + kFallback - 1) / kFallback;
+        GenericGemmKernel<<<dim3(blocks, blocks), dim3(kFallback, kFallback)>>>(da, db, dc, n);
+    }
 
     std::vector<float> result(count);
     cudaMemcpy(result.data(), dc, bytes, cudaMemcpyDeviceToHost);
