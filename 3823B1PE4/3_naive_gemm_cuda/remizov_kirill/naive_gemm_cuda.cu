@@ -3,6 +3,7 @@
 #include <cuda_runtime.h>
 
 #include <cstddef>
+#include <thread>
 
 namespace {
 
@@ -68,6 +69,27 @@ __global__ void GenericGemmKernel(const float* __restrict__ a,
     c[row * n + col] = sum;
 }
 
+// Device memory is allocated once and reused across calls.
+void ReserveDevice(float** a, float** b, float** c, std::size_t count) {
+    static float* da = nullptr;
+    static float* db = nullptr;
+    static float* dc = nullptr;
+    static std::size_t capacity = 0;
+
+    if (count > capacity) {
+        cudaFree(da);
+        cudaFree(db);
+        cudaFree(dc);
+        cudaMalloc(&da, count * sizeof(float));
+        cudaMalloc(&db, count * sizeof(float));
+        cudaMalloc(&dc, count * sizeof(float));
+        capacity = count;
+    }
+    *a = da;
+    *b = db;
+    *c = dc;
+}
+
 }  // namespace
 
 std::vector<float> NaiveGemmCUDA(const std::vector<float>& a,
@@ -82,9 +104,11 @@ std::vector<float> NaiveGemmCUDA(const std::vector<float>& a,
     float* da = nullptr;
     float* db = nullptr;
     float* dc = nullptr;
-    cudaMalloc(&da, bytes);
-    cudaMalloc(&db, bytes);
-    cudaMalloc(&dc, bytes);
+    ReserveDevice(&da, &db, &dc, count);
+
+    // Host allocation (zero-fill + page faults) overlaps with the copies.
+    std::vector<float> result;
+    std::thread allocator([&result, count] { result.resize(count); });
 
     cudaMemcpy(da, a.data(), bytes, cudaMemcpyHostToDevice);
     cudaMemcpy(db, b.data(), bytes, cudaMemcpyHostToDevice);
@@ -99,11 +123,7 @@ std::vector<float> NaiveGemmCUDA(const std::vector<float>& a,
         GenericGemmKernel<<<dim3(blocks, blocks), dim3(kFallback, kFallback)>>>(da, db, dc, n);
     }
 
-    std::vector<float> result(count);
+    allocator.join();
     cudaMemcpy(result.data(), dc, bytes, cudaMemcpyDeviceToHost);
-
-    cudaFree(da);
-    cudaFree(db);
-    cudaFree(dc);
     return result;
 }
