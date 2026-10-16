@@ -38,10 +38,10 @@ __global__ void naive_gemm_vec4_kernel(const float4* __restrict__ A,
     float4 c3 = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 
     // Each row of A has n4 float4 elements
-    const float* A0 = A + row * n4;
-    const float* A1 = A + (row + 1) * n4;
-    const float* A2 = A + (row + 2) * n4;
-    const float* A3 = A + (row + 3) * n4;
+    const float4* A0 = A + row * n4;
+    const float4* A1 = A + (row + 1) * n4;
+    const float4* A2 = A + (row + 2) * n4;
+    const float4* A3 = A + (row + 3) * n4;
 
     for (int k4 = 0; k4 < n4; ++k4) {
         // Load 4 horizontal elements (k, k+1, k+2, k+3) for each of the 4 rows of A
