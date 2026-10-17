@@ -5,16 +5,21 @@
 
 namespace {
 
-// 0.5 * x * (1 + tanh(z)) == x / (1 + exp(-2z)), z = sqrt(2/pi) * (x + 0.044715 * x^3)
+// 0.5 * x * (1 + tanh(z)) == x * sigmoid(u), u = 2z = 2 * sqrt(2/pi) * (x + 0.044715 * x^3).
+// Sigmoid is computed in the stable form with exp(-|u|) <= 1, so exp never overflows
+// (with an overflowing exp the result for large negative x depends on the driver).
 const char* kKernelSource = R"CLC(
-#define GELU_A (-2.0f * 0.7978845608028654f)
+#define GELU_A (2.0f * 0.7978845608028654f)
 #define GELU_B (GELU_A * 0.044715f)
 
 __kernel void Gelu(__global const float4* in, __global float4* out, uint n4) {
     const uint i = get_global_id(0);
     if (i < n4) {
         const float4 x = in[i];
-        out[i] = native_divide(x, 1.0f + native_exp(x * (GELU_A + GELU_B * x * x)));
+        const float4 u = x * (GELU_A + GELU_B * x * x);
+        const float4 e = exp(-fabs(u));
+        const float4 numerator = select(e, (float4)(1.0f), isgreaterequal(u, (float4)(0.0f)));
+        out[i] = x * numerator / (1.0f + e);
     }
 }
 
@@ -22,7 +27,9 @@ __kernel void GeluTail(__global const float* in, __global float* out, uint offse
     const uint i = offset + get_global_id(0);
     if (i < n) {
         const float x = in[i];
-        out[i] = x / (1.0f + exp(x * (GELU_A + GELU_B * x * x)));
+        const float u = x * (GELU_A + GELU_B * x * x);
+        const float e = exp(-fabs(u));
+        out[i] = x * (u >= 0.0f ? 1.0f : e) / (1.0f + e);
     }
 }
 )CLC";
@@ -77,7 +84,7 @@ struct Context {
         if (err != CL_SUCCESS) return false;
         program = clCreateProgramWithSource(context, 1, &kKernelSource, nullptr, &err);
         if (err != CL_SUCCESS) return false;
-        if (clBuildProgram(program, 1, &device, "-cl-fast-relaxed-math", nullptr, nullptr) != CL_SUCCESS) {
+        if (clBuildProgram(program, 1, &device, nullptr, nullptr, nullptr) != CL_SUCCESS) {
             return false;
         }
         kernel = clCreateKernel(program, "Gelu", &err);
