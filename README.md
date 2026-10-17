@@ -612,6 +612,7 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 |**FAST**|**FAST**|**0.2036**|**-**|
 |3823B1PE3|dergachev_arseniy|0.2382|1|
 |3823B1PE1|rusakova_aleksandra|0.2386|2|
+|3823B1PE4|dilshodov_adkham|0.2399|1|
 |3823B1PE1|otcheskov_semyon|0.2442|3|
 |3823B1PE3|marin_lev|0.2457|3|
 |3823B1PE2|klimenko_vladislav|0.2468|1|
@@ -622,7 +623,6 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 |3823B1PE3|bortsova_angelina|0.2561|2|
 |**REF**|**REF**|**0.3289**|**-**|
 |3823B1PE2|zorin_danila_artemovich|0.4599|3|
-|3823B1PE4|dilshodov_adkham|TEST FAILED|-|
 |3823B1FI1|dorofeev_ivan|RUN FAILED|-|
 
 # Tasks Done
@@ -688,15 +688,15 @@ Passed: 3
 ## 3823B1PE4
 |Group|Name|Passed|Score|
 |-----|----|------|-----|
-|3823B1PE4|dilshodov_adkham|7/8|443|
+|3823B1PE4|dilshodov_adkham|**8/8**|**507**|
 |3823B1PE4|peryashkin_vasily|2/8|118|
 |3823B1PE4|remizov_kirill|3/8|187|
 |3823B1PE4|urin_oleg|1/8|62|
 |3823B1PE4|zaharov_gleb|2/8|122|
 
-Passed: 0
+Passed: 1
 
-**Total Passed: 10**
+**Total Passed: 11**
 
 ---
 *Maximum Score: 512 (64 per task)*
