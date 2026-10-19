@@ -171,7 +171,6 @@ std::vector<float> SoftmaxCUDA(const std::vector<float>& input, int row_count) {
     int block = 32;
     while (block < kMaxBlockThreads && block < row_size) block <<= 1;
 
-    // Решаем, влезает ли строка в shared
     const bool use_shared = (row_size <= kMaxSharedCacheFloats);
     const size_t shared_bytes = use_shared
         ? static_cast<size_t>(row_size) * sizeof(float)
