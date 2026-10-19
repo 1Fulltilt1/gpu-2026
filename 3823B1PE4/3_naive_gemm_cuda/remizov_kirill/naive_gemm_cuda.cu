@@ -36,12 +36,14 @@ __global__ void NaiveGemmKernel(const float* __restrict__ a,
         }
 #pragma unroll
         for (int r = 0; r < kTile; ++r) {
+            const float ark[kTile] = {av[r].x, av[r].y, av[r].z, av[r].w};
 #pragma unroll
             for (int q = 0; q < kTile; ++q) {
-                acc[r][0] = fmaf(av[r].x, bv[q].x, acc[r][0]);
-                acc[r][1] = fmaf(av[r].y, bv[q].y, acc[r][1]);
-                acc[r][2] = fmaf(av[r].z, bv[q].z, acc[r][2]);
-                acc[r][3] = fmaf(av[r].w, bv[q].w, acc[r][3]);
+                const float bkc[kTile] = {bv[q].x, bv[q].y, bv[q].z, bv[q].w};
+#pragma unroll
+                for (int cq = 0; cq < kTile; ++cq) {
+                    acc[r][cq] = fmaf(ark[q], bkc[cq], acc[r][cq]);
+                }
             }
         }
     }
