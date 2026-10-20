@@ -446,6 +446,7 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 |3823B1PE3|batkov_filipp|0.2535|2|
 |3823B1PE2|sinev_artem|0.2567|1|
 |3823B1FI1|kosolapov_vitaliy|0.2568|2|
+|3823B1PE2|tsyplakov_kirill|0.2570|8|
 |3823B1PE1|zhurin_ivan|0.2580|7|
 |3823B1PE2|kotelnikova_anastasia|0.2591|6|
 |3823B1PE2|klimenko_vladislav|0.2611|2|
@@ -459,7 +460,6 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 |3823B1PE4|zaharov_gleb|0.4929|1|
 |**REF**|**REF**|**0.5440**|**-**|
 |3823B1PE4|urin_oleg|TEST FAILED|-|
-|3823B1PE2|tsyplakov_kirill|BUILD FAILED|-|
 
 ## 2_gelu_cuda (134217728 elements)
 |Group|Name|Result|Rank|
@@ -682,14 +682,14 @@ Passed: 4
 ## 3823B1PE2
 |Group|Name|Passed|Score|
 |-----|----|------|-----|
-|3823B1PE2|klimenko_vladislav|**8/8**|**484**|
+|3823B1PE2|klimenko_vladislav|**8/8**|**483**|
 |3823B1PE2|kolotukhin_alexander|2/8|115|
-|3823B1PE2|kotelnikova_anastasia|**8/8**|**471**|
+|3823B1PE2|kotelnikova_anastasia|**8/8**|**470**|
 |3823B1PE2|sinev_artem|5/8|294|
-|3823B1PE2|tsyplakov_kirill|3/8|160|
+|3823B1PE2|tsyplakov_kirill|4/8|213|
 |3823B1PE2|vasiliev_mikhail|6/8|359|
 |3823B1PE2|viderman_aleksandra|4/8|236|
-|3823B1PE2|zorin_danila_artemovich|**8/8**|**471**|
+|3823B1PE2|zorin_danila_artemovich|**8/8**|**470**|
 
 Passed: 3
 
