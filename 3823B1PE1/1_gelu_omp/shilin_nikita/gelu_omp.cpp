@@ -30,7 +30,7 @@ void gelu_kernel(const float* __restrict__ in, float* __restrict__ out, std::ptr
     }
 }
 
-}  // namespace
+}
 
 std::vector<float> GeluOMP(const std::vector<float>& input) {
     static const int kOnce = (reuse_large_allocs(), 0);
