@@ -23,7 +23,7 @@ std::vector<float> GeluOMP(const std::vector<float>& input) {
     #pragma omp parallel for schedule(static)
     for (std::size_t i = 0; i < n8; i += 8) {
 
-        #pragma omp simd aligned(in, out: 32)
+        #pragma omp simd
         for (std::size_t j = 0; j < 8; ++j) {
             const float x = in[i + j];
             
