@@ -423,6 +423,7 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 ## 1_gelu_omp (134217728 elements)
 |Group|Name|Result|Rank|
 |-----|----|------|----|
+|3823B1PE1|shilin_nikita|0.0864|6|
 |3823B1FI1|dorofeev_ivan|0.1488|4|
 |**FAST**|**FAST**|**0.1741**|**-**|
 |3823B1PE1|rusakova_aleksandra|0.2258|3|
@@ -443,7 +444,6 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 |3823B1PE4|peryashkin_vasily|0.2506|4|
 |3823B1FI1|krykov_egor|0.2522|3|
 |3823B1PE2|vasiliev_mikhail|0.2529|5|
-|3823B1PE1|shilin_nikita|0.2532|6|
 |3823B1PE3|batkov_filipp|0.2535|2|
 |3823B1PE2|sinev_artem|0.2567|1|
 |3823B1FI1|kosolapov_vitaliy|0.2568|2|
@@ -675,14 +675,14 @@ Passed: 0
 |Group|Name|Passed|Score|
 |-----|----|------|-----|
 |3823B1PE1|golovanov_daniil|6/8|321|
-|3823B1PE1|kondrashova_victoria|2/8|100|
+|3823B1PE1|kondrashova_victoria|2/8|99|
 |3823B1PE1|morozov_nikita|1/8|55|
-|3823B1PE1|otcheskov_semyon|**8/8**|**477**|
-|3823B1PE1|perepelkin_iaroslav|**8/8**|**471**|
+|3823B1PE1|otcheskov_semyon|**8/8**|**476**|
+|3823B1PE1|perepelkin_iaroslav|**8/8**|**470**|
 |3823B1PE1|redkina_alina|**8/8**|**487**|
-|3823B1PE1|rusakova_aleksandra|**8/8**|**480**|
-|3823B1PE1|shilin_nikita|7/8|403|
-|3823B1PE1|tsibareva_ekaterina|4/8|220|
+|3823B1PE1|rusakova_aleksandra|**8/8**|**479**|
+|3823B1PE1|shilin_nikita|7/8|408|
+|3823B1PE1|tsibareva_ekaterina|4/8|219|
 |3823B1PE1|zhurin_ivan|4/8|210|
 
 Passed: 4
