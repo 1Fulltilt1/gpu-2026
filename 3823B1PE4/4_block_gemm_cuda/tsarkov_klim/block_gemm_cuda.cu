@@ -39,7 +39,7 @@ public:
 
 private:
     float* ptr_ = nullptr;
-}
+};
 
 __global__ void BlockGemmKernel(
     const float* a,
