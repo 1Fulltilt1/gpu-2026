@@ -1,0 +1,4 @@
+/home/crazyproger/sandbox/gpu-2026/3823B1PE1/2_gelu_cuda/ivanova_polina/gelu_cuda.cu:1:10: fatal error: gelu_cuda_opt.h: No such file or directory
+    1 | #include "gelu_cuda_opt.h"
+      |          ^~~~~~~~~~~~~~~~~
+compilation terminated.
