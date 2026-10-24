@@ -694,6 +694,7 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 |3823B1PE3|bortsova_angelina|0.2561|2|
 |**REF**|**REF**|**0.3289**|**-**|
 |3823B1PE2|zorin_danila_artemovich|0.4599|3|
+|3823B1PE3|ermakov_alexei|TEST FAILED|-|
 |3823B1PE1|shilin_nikita|TEST FAILED|-|
 |3823B1PE1|kondrashova_victoria|BUILD FAILED|-|
 |3823B1PE2|sinev_artem|TEST FAILED|-|
