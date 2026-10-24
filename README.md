@@ -656,9 +656,9 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 |**REF**|**REF**|**0.2707**|**-**|
 |3823B1PE2|kotelnikova_anastasia|0.2728|3|
 |3823B1PE1|kondrashova_victoria|0.2731|8|
-|3823B1PE1|golovanov_daniil|0.2739|5|
 |3823B1PE2|zorin_danila_artemovich|0.2745|2|
 |3823B1PE4|tsarkov_klim|0.2753|4|
+|3823B1PE1|golovanov_daniil|0.2818|5|
 
 ## 7_layernorm_pycuda (8192x16384 elements)
 |Group|Name|Result|Rank|
