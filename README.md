@@ -509,9 +509,9 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 |3823B1PE4|tsarkov_klim|0.2744|5|
 |3823B1PE3|batkov_filipp|0.2750|2|
 |3823B1PE1|tsibareva_ekaterina|0.2788|2|
-|3823B1PE1|kondrashova_victoria|0.2789|9|
 |3823B1PE1|zhurin_ivan|0.3955|6|
 |3823B1PE4|urin_oleg|TEST FAILED|-|
+|3823B1PE1|kondrashova_victoria|TEST FAILED|9|
 
 ## 3_naive_gemm_cuda (4096 elements)
 |Group|Name|Result|Rank|
@@ -653,10 +653,10 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 |3823B1PE2|klimenko_vladislav|0.2685|1|
 |**REF**|**REF**|**0.2707**|**-**|
 |3823B1PE2|kotelnikova_anastasia|0.2728|3|
+|3823B1PE1|kondrashova_victoria|0.2731|8|
 |3823B1PE1|golovanov_daniil|0.2739|5|
 |3823B1PE2|zorin_danila_artemovich|0.2745|2|
 |3823B1PE4|tsarkov_klim|0.2753|4|
-|3823B1PE1|kondrashova_victoria|BUILD FAILED|-|
 
 ## 7_layernorm_pycuda (8192x16384 elements)
 |Group|Name|Result|Rank|
@@ -704,10 +704,10 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 |3823B1PE3|bortsova_angelina|0.2561|2|
 |3823B1PE4|tsarkov_klim|0.2764|2|
 |**REF**|**REF**|**0.3289**|**-**|
+|3823B1PE1|kondrashova_victoria|0.4422|6|
 |3823B1PE2|zorin_danila_artemovich|0.4599|3|
 |3823B1PE3|ermakov_alexei|TEST FAILED|-|
 |3823B1PE1|shilin_nikita|TEST FAILED|-|
-|3823B1PE1|kondrashova_victoria|BUILD FAILED|-|
 |3823B1PE2|sinev_artem|TEST FAILED|-|
 |3823B1FI1|dorofeev_ivan|RUN FAILED|-|
 
@@ -741,9 +741,9 @@ Passed: 1
 ## 3823B1PE1
 |Group|Name|Passed|Score|
 |-----|----|------|-----|
-|3823B1PE1|golovanov_daniil|6/8|316|
+|3823B1PE1|golovanov_daniil|6/8|315|
 |3823B1PE1|ivanova_polina|7/8|352|
-|3823B1PE1|kondrashova_victoria|6/8|297|
+|3823B1PE1|kondrashova_victoria|**8/8**|**379**|
 |3823B1PE1|melnik_ivan|2/8|103|
 |3823B1PE1|morozov_nikita|1/8|53|
 |3823B1PE1|otcheskov_semyon|**8/8**|**474**|
@@ -752,9 +752,9 @@ Passed: 1
 |3823B1PE1|rusakova_aleksandra|**8/8**|**476**|
 |3823B1PE1|shilin_nikita|7/8|407|
 |3823B1PE1|tsibareva_ekaterina|5/8|263|
-|3823B1PE1|zhurin_ivan|4/8|204|
+|3823B1PE1|zhurin_ivan|4/8|205|
 
-Passed: 4
+Passed: 5
 
 ## 3823B1PE2
 |Group|Name|Passed|Score|
@@ -796,7 +796,7 @@ Passed: 3
 
 Passed: 2
 
-**Total Passed: 14**
+**Total Passed: 15**
 
 ---
 *Maximum Score: 512 (64 per task)*
