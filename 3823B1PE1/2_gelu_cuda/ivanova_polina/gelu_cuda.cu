@@ -11,33 +11,18 @@ __global__ void gelu_vectorized_kernel(const float4* __restrict__ input, float4*
         const float sqrt_2_over_pi = 0.7978845608f;
         const float coeff = 0.044715f;
 
-        {
-            float x = in_val.x;
+        #pragma unroll
+        for (int i = 0; i < 4; ++i) {
+            float x = (i == 0) ? in_val.x : (i == 1) ? in_val.y : (i == 2) ? in_val.z : in_val.w;
             float inner = sqrt_2_over_pi * (x + coeff * x * x * x);
             float exp_2y = __expf(2.0f * inner);
             float fast_tanh = (exp_2y - 1.0f) / (exp_2y + 1.0f);
-            out_val.x = 0.5f * x * (1.0f + fast_tanh);
-        }
-        {
-            float x = in_val.y;
-            float inner = sqrt_2_over_pi * (x + coeff * x * x * x);
-            float exp_2y = __expf(2.0f * inner);
-            float fast_tanh = (exp_2y - 1.0f) / (exp_2y + 1.0f);
-            out_val.y = 0.5f * x * (1.0f + fast_tanh);
-        }
-        {
-            float x = in_val.z;
-            float inner = sqrt_2_over_pi * (x + coeff * x * x * x);
-            float exp_2y = __expf(2.0f * inner);
-            float fast_tanh = (exp_2y - 1.0f) / (exp_2y + 1.0f);
-            out_val.z = 0.5f * x * (1.0f + fast_tanh);
-        }
-        {
-            float x = in_val.w;
-            float inner = sqrt_2_over_pi * (x + coeff * x * x * x);
-            float exp_2y = __expf(2.0f * inner);
-            float fast_tanh = (exp_2y - 1.0f) / (exp_2y + 1.0f);
-            out_val.w = 0.5f * x * (1.0f + fast_tanh);
+            float res = 0.5f * x * (1.0f + fast_tanh);
+            
+            if (i == 0) out_val.x = res;
+            else if (i == 1) out_val.y = res;
+            else if (i == 2) out_val.z = res;
+            else out_val.w = res;
         }
         output[idx] = out_val;
     }
@@ -56,7 +41,7 @@ __global__ void gelu_scalar_kernel(const float* __restrict__ input, float* __res
     }
 }
 
-std::vector<float> GeluCUDAOpt(const std::vector<float>& input) {
+std::vector<float> GeluCUDA(const std::vector<float>& input) {
     size_t n = input.size();
     if (n == 0) return {};
 
