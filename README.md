@@ -604,6 +604,7 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 |3823B1PE2|sinev_artem|0.0557|5|
 |3823B1PE2|klimenko_vladislav|0.0563|1|
 |**REF**|**REF**|**0.0591**|**-**|
+|3823B1PE1|ivanova_polina|0.0688|7|
 
 ## 6_softmax_cuda (8192x16384 elements)
 |Group|Name|Result|Rank|
@@ -703,7 +704,7 @@ Passed: 0
 |Group|Name|Passed|Score|
 |-----|----|------|-----|
 |3823B1PE1|golovanov_daniil|6/8|320|
-|3823B1PE1|ivanova_polina|3/8|144|
+|3823B1PE1|ivanova_polina|4/8|196|
 |3823B1PE1|kondrashova_victoria|2/8|98|
 |3823B1PE1|melnik_ivan|1/8|52|
 |3823B1PE1|morozov_nikita|1/8|53|
