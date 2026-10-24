@@ -1,109 +1,77 @@
 import numpy as np
-import pycuda.driver as cuda
-import pycuda.autoinit
-from pycuda.compiler import SourceModule
+import math
+from numba import cuda, float32
 
-_KERNEL = r"""
-extern "C" __global__ void layernorm_kernel(
-    const float* __restrict__ input,
-    const float* __restrict__ gamma,
-    const float* __restrict__ beta,
-    float* __restrict__ output,
-    int row_size,
-    float eps)
-{
-    const int row = blockIdx.x;
-    const float* row_in  = input  + (long long)row * row_size;
-    float*       row_out = output + (long long)row * row_size;
-
-    extern __shared__ float sdata[];
-
-    float local_sum = 0.0f;
-    for (int j = threadIdx.x; j < row_size; j += blockDim.x) {
-        local_sum += row_in[j];
-    }
-    sdata[threadIdx.x] = local_sum;
-    __syncthreads();
-
-    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
-        if (threadIdx.x < s) {
-            sdata[threadIdx.x] += sdata[threadIdx.x + s];
-        }
-        __syncthreads();
-    }
-    const float mean = sdata[0] / (float)row_size;
-
-    float local_var = 0.0f;
-    for (int j = threadIdx.x; j < row_size; j += blockDim.x) {
-        const float d = row_in[j] - mean;
-        local_var += d * d;
-    }
-    sdata[threadIdx.x] = local_var;
-    __syncthreads();
-
-    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
-        if (threadIdx.x < s) {
-            sdata[threadIdx.x] += sdata[threadIdx.x + s];
-        }
-        __syncthreads();
-    }
-    const float var = sdata[0] / (float)row_size;
-    const float inv_std = rsqrtf(var + eps);
-
-    for (int j = threadIdx.x; j < row_size; j += blockDim.x) {
-        row_out[j] = (row_in[j] - mean) * inv_std * gamma[j] + beta[j];
-    }
-}
-"""
-
-_module = None
-_kernel = None
+THREADS_PER_BLOCK = 256
 
 
-def _get_kernel():
-    global _module, _kernel
-    if _kernel is None:
-        _module = SourceModule(_KERNEL)
-        _kernel = _module.get_function("layernorm_kernel")
-    return _kernel
+@cuda.jit(device=True)
+def _warp_reduce_sum(val):
+    for offset in (16, 8, 4, 2, 1):
+        val += cuda.shfl_down_sync(0xffffffff, val, offset)
+    return val
+
+
+@cuda.jit(device=True)
+def _block_reduce_sum(val, shared):
+    lane = cuda.threadIdx.x & 31
+    wid = cuda.threadIdx.x >> 5
+    nwarps = cuda.blockDim.x >> 5
+    val = _warp_reduce_sum(val)
+    if lane == 0:
+        shared[wid] = val
+    cuda.syncthreads()
+    if wid == 0:
+        v = shared[lane] if lane < nwarps else float32(0)
+        v = _warp_reduce_sum(v)
+        if lane == 0:
+            shared[0] = v
+    cuda.syncthreads()
+    return shared[0]
+
+
+@cuda.jit
+def _layernorm_kernel(values, gamma, beta, row_size, eps):
+    row = cuda.blockIdx.x
+    tid = cuda.threadIdx.x
+    start = row * row_size
+    shared = cuda.shared.array(32, float32)
+
+    local_sum = float32(0)
+    for i in range(tid, row_size, cuda.blockDim.x):
+        local_sum += values[start + i]
+    mean = _block_reduce_sum(local_sum, shared) / float32(row_size)
+
+    local_var = float32(0)
+    for i in range(tid, row_size, cuda.blockDim.x):
+        c = values[start + i] - mean
+        local_var += c * c
+    var = _block_reduce_sum(local_var, shared) / float32(row_size)
+    inv_std = float32(1) / math.sqrt(var + eps)
+
+    for i in range(tid, row_size, cuda.blockDim.x):
+        c = (values[start + i] - mean) * inv_std
+        values[start + i] = c * gamma[i] + beta[i]
 
 
 def layernorm_pycuda(input, gamma, beta, row_size, eps=1e-5):
-    x = np.asarray(input, dtype=np.float32).ravel()
-    g = np.asarray(gamma, dtype=np.float32).ravel()
-    b = np.asarray(beta,  dtype=np.float32).ravel()
+    x = np.ascontiguousarray(input, dtype=np.float32)
+    g = np.ascontiguousarray(gamma, dtype=np.float32)
+    b = np.ascontiguousarray(beta, dtype=np.float32)
 
     if x.size % row_size != 0:
         raise ValueError("input size must be divisible by row_size")
     if g.size != row_size or b.size != row_size:
-        raise ValueError("gamma and beta must have length row_size")
+        raise ValueError("gamma and beta must have length == row_size")
 
     row_count = x.size // row_size
-    out = np.empty_like(x)
 
-    x_gpu = cuda.mem_alloc(x.nbytes)
-    g_gpu = cuda.mem_alloc(g.nbytes)
-    b_gpu = cuda.mem_alloc(b.nbytes)
-    o_gpu = cuda.mem_alloc(out.nbytes)
+    d_x = cuda.to_device(x)
+    d_g = cuda.to_device(g)
+    d_b = cuda.to_device(b)
 
-    cuda.memcpy_htod(x_gpu, x)
-    cuda.memcpy_htod(g_gpu, g)
-    cuda.memcpy_htod(b_gpu, b)
+    _layernorm_kernel[row_count, THREADS_PER_BLOCK](
+        d_x, d_g, d_b, row_size, np.float32(eps)
+    )
 
-    kernel = _get_kernel()
-
-    threads = 128
-    blocks = row_count
-    shmem = threads * 4
-
-    kernel(x_gpu, g_gpu, b_gpu, o_gpu,
-           np.int32(row_size), np.float32(eps),
-           block=(threads, 1, 1),
-           grid=(blocks, 1, 1),
-           shared=shmem)
-
-    cuda.memcpy_dtoh(out, o_gpu)
-
-    x_gpu.free(); g_gpu.free(); b_gpu.free(); o_gpu.free()
-
-    return out
+    return d_x.copy_to_host()
