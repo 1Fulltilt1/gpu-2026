@@ -1,0 +1,63 @@
+/home/crazyproger/sandbox/gpu-2026/3823B1PE4/3_naive_gemm_cuda/romanov_michail/naive_gemm_cuda.cu(62): error: namespace "std" has no member "vector"
+  std::vector<float> NaiveGemmCUDA(const std::vector<float>& a,
+       ^
+
+/home/crazyproger/sandbox/gpu-2026/3823B1PE4/3_naive_gemm_cuda/romanov_michail/naive_gemm_cuda.cu(62): error: expected a ";"
+  std::vector<float> NaiveGemmCUDA(const std::vector<float>& a,
+             ^
+
+/home/crazyproger/sandbox/gpu-2026/3823B1PE4/3_naive_gemm_cuda/romanov_michail/naive_gemm_cuda.cu(86): warning #12-D: parsing restarts here after previous syntax error
+                         (n + BLOCK_SIZE - 1) / BLOCK_SIZE);
+                                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+/home/crazyproger/sandbox/gpu-2026/3823B1PE4/3_naive_gemm_cuda/romanov_michail/naive_gemm_cuda.cu(88): error: this declaration has no storage class or type specifier
+      NaiveGemmKernel<<<blocksPerGrid, threadsPerBlock>>>(d_a, d_b, d_c, n);
+      ^
+
+/home/crazyproger/sandbox/gpu-2026/3823B1PE4/3_naive_gemm_cuda/romanov_michail/naive_gemm_cuda.cu(88): error: expected a ";"
+      NaiveGemmKernel<<<blocksPerGrid, threadsPerBlock>>>(d_a, d_b, d_c, n);
+                     ^
+
+/home/crazyproger/sandbox/gpu-2026/3823B1PE4/3_naive_gemm_cuda/romanov_michail/naive_gemm_cuda.cu(90): error: this declaration has no storage class or type specifier
+      alloc_thread.join();
+      ^
+
+/home/crazyproger/sandbox/gpu-2026/3823B1PE4/3_naive_gemm_cuda/romanov_michail/naive_gemm_cuda.cu(90): error: expected a ";"
+      alloc_thread.join();
+                  ^
+
+/home/crazyproger/sandbox/gpu-2026/3823B1PE4/3_naive_gemm_cuda/romanov_michail/naive_gemm_cuda.cu(92): error: this declaration has no storage class or type specifier
+      cudaMemcpy(c.data(), d_c, bytes, cudaMemcpyDeviceToHost);
+      ^
+
+/home/crazyproger/sandbox/gpu-2026/3823B1PE4/3_naive_gemm_cuda/romanov_michail/naive_gemm_cuda.cu(92): error: declaration is incompatible with "cudaError_t cudaMemcpy(void *, const void *, size_t, cudaMemcpyKind)" (declared at line 6051 of /usr/local/cuda/bin/../targets/x86_64-linux/include/cuda_runtime_api.h)
+      cudaMemcpy(c.data(), d_c, bytes, cudaMemcpyDeviceToHost);
+      ^
+
+/home/crazyproger/sandbox/gpu-2026/3823B1PE4/3_naive_gemm_cuda/romanov_michail/naive_gemm_cuda.cu(92): error: identifier "c" is undefined
+      cudaMemcpy(c.data(), d_c, bytes, cudaMemcpyDeviceToHost);
+                 ^
+
+/home/crazyproger/sandbox/gpu-2026/3823B1PE4/3_naive_gemm_cuda/romanov_michail/naive_gemm_cuda.cu(92): error: identifier "d_c" is undefined
+      cudaMemcpy(c.data(), d_c, bytes, cudaMemcpyDeviceToHost);
+                           ^
+
+/home/crazyproger/sandbox/gpu-2026/3823B1PE4/3_naive_gemm_cuda/romanov_michail/naive_gemm_cuda.cu(92): error: identifier "bytes" is undefined
+      cudaMemcpy(c.data(), d_c, bytes, cudaMemcpyDeviceToHost);
+                                ^
+
+/home/crazyproger/sandbox/gpu-2026/3823B1PE4/3_naive_gemm_cuda/romanov_michail/naive_gemm_cuda.cu(92): error: too many initializer values
+      cudaMemcpy(c.data(), d_c, bytes, cudaMemcpyDeviceToHost);
+                           ^
+
+/home/crazyproger/sandbox/gpu-2026/3823B1PE4/3_naive_gemm_cuda/romanov_michail/naive_gemm_cuda.cu(94): error: expected a declaration
+      return c;
+      ^
+
+/home/crazyproger/sandbox/gpu-2026/3823B1PE4/3_naive_gemm_cuda/romanov_michail/naive_gemm_cuda.cu(95): error: expected a declaration
+  }
+  ^
+
+14 errors detected in the compilation of "/home/crazyproger/sandbox/gpu-2026/3823B1PE4/3_naive_gemm_cuda/romanov_michail/naive_gemm_cuda.cu".
