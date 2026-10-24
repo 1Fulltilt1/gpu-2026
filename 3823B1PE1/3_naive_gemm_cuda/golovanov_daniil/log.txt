@@ -1,1 +1,0 @@
-Source file /home/crazyproger/sandbox/gpu-2026/3823B1PE1/3_naive_gemm_cuda/golovanov_daniil/naive_gemm_cuda.cu not found
