@@ -2,103 +2,105 @@
 
 #include <cuda_runtime.h>
 
-#include <stdexcept>
-#include <string>
+#include <cstddef>
+#include <vector>
 
-namespace {
+#define THREADS 256
 
-constexpr int kThreads = 128;
+__global__ void softmax_row_kernel(const float* __restrict__ input,
+                                   float* __restrict__ output,
+                                   int row_length) {
+    const int row_idx = blockIdx.x;
+    const int tid = threadIdx.x;
+    const int row_offset = row_idx * row_length;
 
-__global__ void SoftmaxKernel(const float* input, float* output,
-                              int row_count, int row_size) {
-    const int row = blockIdx.x;
-    if (row >= row_count) return;
-
-    const float* row_in  = input  + static_cast<std::size_t>(row) * row_size;
-    float*       row_out = output + static_cast<std::size_t>(row) * row_size;
-
-    extern __shared__ float sdata[];
+    __shared__ float reduce_buffer[THREADS];
 
     float local_max = -INFINITY;
-    for (int j = threadIdx.x; j < row_size; j += blockDim.x) {
-        local_max = fmaxf(local_max, row_in[j]);
+    for (int i = tid; i < row_length; i += blockDim.x) {
+        local_max = fmaxf(local_max, input[row_offset + i]);
     }
-
-    sdata[threadIdx.x] = local_max;
+    reduce_buffer[tid] = local_max;
     __syncthreads();
 
     for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
-        if (threadIdx.x < stride) {
-            sdata[threadIdx.x] = fmaxf(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
+        if (tid < stride) {
+            reduce_buffer[tid] = fmaxf(reduce_buffer[tid], reduce_buffer[tid + stride]);
         }
         __syncthreads();
     }
-    const float row_max = sdata[0];
+    const float row_max = reduce_buffer[0];
 
     float local_sum = 0.0f;
-    for (int j = threadIdx.x; j < row_size; j += blockDim.x) {
-        const float e = __expf(row_in[j] - row_max);
-        sdata[threadIdx.x + blockDim.x] = e;
-        local_sum += e;
+    for (int i = tid; i < row_length; i += blockDim.x) {
+        local_sum += expf(input[row_offset + i] - row_max);
     }
-
-    __syncthreads();
-    sdata[threadIdx.x] = local_sum;
+    reduce_buffer[tid] = local_sum;
     __syncthreads();
 
     for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
-        if (threadIdx.x < stride) {
-            sdata[threadIdx.x] += sdata[threadIdx.x + stride];
+        if (tid < stride) {
+            reduce_buffer[tid] += reduce_buffer[tid + stride];
         }
         __syncthreads();
     }
-    const float inv_sum = 1.0f / sdata[0];
+    const float inv_sum = 1.0f / reduce_buffer[0];
 
-    for (int j = threadIdx.x; j < row_size; j += blockDim.x) {
-        row_out[j] = __expf(row_in[j] - row_max) * inv_sum;
+    for (int i = tid; i < row_length; i += blockDim.x) {
+        output[row_offset + i] = expf(input[row_offset + i] - row_max) * inv_sum;
     }
 }
 
-void CheckCuda(cudaError_t error, const char* operation) {
-    if (error != cudaSuccess) {
-        throw std::runtime_error(std::string(operation) + ": " + cudaGetErrorString(error));
+namespace {
+    float* g_dev_input = nullptr;
+    float* g_dev_output = nullptr;
+    std::size_t g_dev_capacity = 0;
+
+    bool ensure_device_memory(std::size_t elements) {
+        if (elements <= g_dev_capacity) return true;
+
+        if (g_dev_input) cudaFree(g_dev_input);
+        if (g_dev_output) cudaFree(g_dev_output);
+        g_dev_input = nullptr;
+        g_dev_output = nullptr;
+
+        const std::size_t bytes = elements * sizeof(float);
+        if (cudaMalloc(&g_dev_input, bytes) != cudaSuccess) return false;
+        if (cudaMalloc(&g_dev_output, bytes) != cudaSuccess) {
+            cudaFree(g_dev_input);
+            g_dev_input = nullptr;
+            return false;
+        }
+        g_dev_capacity = elements;
+        return true;
     }
 }
-
-} // namespace
 
 std::vector<float> SoftmaxCUDA(const std::vector<float>& input, int row_count) {
-    if (row_count <= 0 || input.size() % static_cast<std::size_t>(row_count) != 0) {
-        throw std::invalid_argument("invalid row_count");
+    if (input.empty() || row_count <= 0) return {};
+
+    const int row_length = static_cast<int>(input.size() / row_count);
+    if (row_length <= 0) return {};
+
+    const std::size_t total_elements = input.size();
+    const std::size_t bytes = total_elements * sizeof(float);
+
+    std::vector<float> output(total_elements);
+
+    if (!ensure_device_memory(total_elements)) return {};
+
+    if (cudaMemcpy(g_dev_input, input.data(), bytes, cudaMemcpyHostToDevice) != cudaSuccess) {
+        return {};
     }
-    const int row_size = static_cast<int>(input.size() / row_count);
-    if (row_size <= 0) {
-        throw std::invalid_argument("row_size must be positive");
+
+    softmax_row_kernel<<<row_count, THREADS>>>(g_dev_input, g_dev_output, row_length);
+
+    if (cudaGetLastError() != cudaSuccess) return {};
+    if (cudaDeviceSynchronize() != cudaSuccess) return {};
+
+    if (cudaMemcpy(output.data(), g_dev_output, bytes, cudaMemcpyDeviceToHost) != cudaSuccess) {
+        return {};
     }
 
-    std::vector<float> output(input.size(), 0.0f);
-    if (input.empty()) return output;
-
-    float *d_in = nullptr, *d_out = nullptr;
-    const std::size_t bytes = input.size() * sizeof(float);
-
-    CheckCuda(cudaMalloc(&d_in, bytes), "cudaMalloc(input)");
-    try {
-        CheckCuda(cudaMalloc(&d_out, bytes), "cudaMalloc(output)");
-        CheckCuda(cudaMemcpy(d_in, input.data(), bytes, cudaMemcpyHostToDevice), "copy input");
-
-        const int threads = kThreads;
-        const int blocks = row_count;
-        const std::size_t shmem = static_cast<std::size_t>(threads) * 2 * sizeof(float);
-
-        SoftmaxKernel<<<blocks, threads, shmem>>>(d_in, d_out, row_count, row_size);
-        CheckCuda(cudaGetLastError(), "SoftmaxKernel launch");
-        CheckCuda(cudaMemcpy(output.data(), d_out, bytes, cudaMemcpyDeviceToHost), "copy output");
-    } catch (...) {
-        cudaFree(d_out); cudaFree(d_in);
-        throw;
-    }
-    CheckCuda(cudaFree(d_out), "cudaFree(output)");
-    CheckCuda(cudaFree(d_in), "cudaFree(input)");
     return output;
 }
