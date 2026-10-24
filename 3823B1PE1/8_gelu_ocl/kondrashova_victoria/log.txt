@@ -1,0 +1,20 @@
+In file included from /usr/include/CL/cl.h:20,
+                 from /home/crazyproger/sandbox/gpu-2026/3823B1PE1/8_gelu_ocl/kondrashova_victoria/gelu_ocl.cpp:3:
+/usr/include/CL/cl_version.h:22:104: note: ‘#pragma message: cl_version.h: CL_TARGET_OPENCL_VERSION is not defined. Defaulting to 300 (OpenCL 3.0)’
+   22 | #pragma message("cl_version.h: CL_TARGET_OPENCL_VERSION is not defined. Defaulting to 300 (OpenCL 3.0)")
+      |                                                                                                        ^
+/home/crazyproger/sandbox/gpu-2026/3823B1PE1/8_gelu_ocl/kondrashova_victoria/gelu_ocl.cpp: In function ‘{anonymous}::OpenCLContext {anonymous}::CreateOpenCLContext(int)’:
+/home/crazyproger/sandbox/gpu-2026/3823B1PE1/8_gelu_ocl/kondrashova_victoria/gelu_ocl.cpp:56:41: error: invalid conversion from ‘cl_context’ {aka ‘_cl_context*’} to ‘cl_int’ {aka ‘int’} [-fpermissive]
+   56 |     cl_int err = clCreateContextFromType(nullptr, CL_DEVICE_TYPE_GPU,
+      |                  ~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                                         |
+      |                                         cl_context {aka _cl_context*}
+   57 |                                          nullptr, nullptr, &err);
+      |                                          ~~~~~~~~~~~~~~~~~~~~~~~
+/home/crazyproger/sandbox/gpu-2026/3823B1PE1/8_gelu_ocl/kondrashova_victoria/gelu_ocl.cpp:79:37: warning: ‘_cl_command_queue* clCreateCommandQueue(cl_context, cl_device_id, cl_command_queue_properties, cl_int*)’ is deprecated [-Wdeprecated-declarations]
+   79 |     ocl.queue = clCreateCommandQueue(ocl.context, ocl.device_id, 0, &err);
+      |                 ~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/crazyproger/sandbox/gpu-2026/3823B1PE1/8_gelu_ocl/kondrashova_victoria/gelu_ocl.cpp:3:
+/usr/include/CL/cl.h:1906:1: note: declared here
+ 1906 | clCreateCommandQueue(cl_context                     context,
+      | ^~~~~~~~~~~~~~~~~~~~
