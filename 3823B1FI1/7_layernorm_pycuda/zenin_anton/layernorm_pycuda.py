@@ -10,7 +10,6 @@ _KERNEL_TEMPLATE = r"""
 #define WARP_SIZE 32
 #define WARPS (BLOCK / WARP_SIZE)
 
-// Sum over a warp: after 5 steps every thread of the warp has the result
 __device__ __forceinline__ float WarpSum(float value) {{
     #pragma unroll
     for (int offset = WARP_SIZE / 2; offset > 0; offset /= 2) {{
@@ -19,8 +18,6 @@ __device__ __forceinline__ float WarpSum(float value) {{
     return value;
 }}
 
-// Sum over the whole block: warp sums are combined through shared memory.
-// Every thread of the block gets the result.
 __device__ __forceinline__ float BlockSum(float value, float* warp_sums) {{
     value = WarpSum(value);
 #if BLOCK > WARP_SIZE
@@ -31,8 +28,8 @@ __device__ __forceinline__ float BlockSum(float value, float* warp_sums) {{
     }}
     __syncthreads();
     value = (lane < WARPS) ? warp_sums[lane] : 0.0f;
-    value = WarpSum(value);   // every warp sums the WARPS partial results
-    __syncthreads();          // warp_sums may be reused by the next BlockSum
+    value = WarpSum(value);   
+    __syncthreads();          
 #endif
     return value;
 }}
@@ -47,10 +44,8 @@ layernorm_kernel(float* data,
     const float inv_n = 1.0f / ROW_SIZE;
 
 #if ITEMS > 0
-    // ---- Main variant: the row is cached in registers ----
+    
     float values[ITEMS];
-
-    // 1. Load the elements and compute the mean
     float local_sum = 0.0f;
     #pragma unroll
     for (int i = 0; i < ITEMS; ++i) {{
@@ -60,8 +55,6 @@ layernorm_kernel(float* data,
     }}
     const float mean = BlockSum(local_sum, warp_sums) * inv_n;
 
-    // 2. Variance as the mean of squared deviations (two-pass formula,
-    //    numerically stable; cheap because values are in registers)
     float local_sq = 0.0f;
     #pragma unroll
     for (int i = 0; i < ITEMS; ++i) {{
@@ -81,7 +74,7 @@ layernorm_kernel(float* data,
         }}
     }}
 #else
-    // ---- Fallback for very long rows that do not fit in registers ----
+    
     float local_sum = 0.0f;
     for (int j = threadIdx.x; j < ROW_SIZE; j += BLOCK) {{
         local_sum += row[j];
@@ -110,7 +103,6 @@ _buffers = {}
 
 
 def _launch_config(row_size):
-    """Threads per block and elements per thread for the given row size."""
     if row_size <= 512:
         block = 32                                   
         items = max(1, (row_size + block - 1) // block)
@@ -130,7 +122,6 @@ def _make_source(row_size):
 
 
 def _get_kernel(row_size):
-    """Compiles the kernel for this row size once and reuses it."""
     if row_size not in _kernels:
         source, block = _make_source(row_size)
         module = SourceModule(source, options=["-O3", "--use_fast_math"])
@@ -139,7 +130,6 @@ def _get_kernel(row_size):
 
 
 def _get_buffer(name, nbytes):
-    """Device memory is allocated once and reused while it is big enough."""
     buffer = _buffers.get(name)
     if buffer is None or buffer[1] < nbytes:
         if buffer is not None:
