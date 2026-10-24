@@ -28,7 +28,6 @@ std::vector<float> GemmCUBLAS(const std::vector<float>& a,
         cudaStreamCreate(&stream);
         cublasSetStream(handle, stream);
         
-        // КЛЮЧЕВОЕ УСКОРЕНИЕ: Включаем Tensor Cores / TF32 для cuBLAS
         cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH);
         
         initialized = true;
