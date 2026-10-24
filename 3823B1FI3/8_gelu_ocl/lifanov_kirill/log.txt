@@ -1,0 +1,5 @@
+/home/crazyproger/sandbox/gpu-2026/3823B1FI3/8_gelu_ocl/lifanov_kirill/gelu_ocl.cpp: In function ‘std::vector<float> GeluOCL(const std::vector<float>&, int)’:
+/home/crazyproger/sandbox/gpu-2026/3823B1FI3/8_gelu_ocl/lifanov_kirill/gelu_ocl.cpp:214:14: error: ‘memcpy’ is not a member of ‘std’; did you mean ‘wmemcpy’?
+  214 |         std::memcpy(host_in, input.data(), main_n * sizeof(float));
+      |              ^~~~~~
+      |              wmemcpy
