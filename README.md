@@ -611,6 +611,7 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 |3823B1PE2|kotelnikova_anastasia|0.0505|3|
 |3823B1PE1|golovanov_daniil|0.0506|5|
 |3823B1FI3|lifanov_kirill|0.0517|1|
+|3823B1PE1|tsibareva_ekaterina|0.0539|9|
 |3823B1PE2|sinev_artem|0.0557|5|
 |3823B1PE2|klimenko_vladislav|0.0563|1|
 |3823B1PE1|kondrashova_victoria|0.0567|8|
@@ -723,8 +724,8 @@ Passed: 0
 |Group|Name|Passed|Score|
 |-----|----|------|-----|
 |3823B1PE1|golovanov_daniil|6/8|319|
-|3823B1PE1|ivanova_polina|4/8|193|
-|3823B1PE1|kondrashova_victoria|6/8|302|
+|3823B1PE1|ivanova_polina|4/8|192|
+|3823B1PE1|kondrashova_victoria|6/8|301|
 |3823B1PE1|melnik_ivan|2/8|103|
 |3823B1PE1|morozov_nikita|1/8|53|
 |3823B1PE1|otcheskov_semyon|**8/8**|**474**|
@@ -732,7 +733,7 @@ Passed: 0
 |3823B1PE1|redkina_alina|**8/8**|**486**|
 |3823B1PE1|rusakova_aleksandra|**8/8**|**476**|
 |3823B1PE1|shilin_nikita|7/8|408|
-|3823B1PE1|tsibareva_ekaterina|4/8|215|
+|3823B1PE1|tsibareva_ekaterina|5/8|265|
 |3823B1PE1|zhurin_ivan|4/8|206|
 
 Passed: 4
