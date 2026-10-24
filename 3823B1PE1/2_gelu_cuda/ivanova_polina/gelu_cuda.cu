@@ -1,43 +1,32 @@
 #include "gelu_cuda.h"
 #include <cuda_runtime.h>
 #include <cmath>
-#include <algorithm>
 
-__global__ void gelu_vectorized_kernel(const float4* __restrict__ input, float4* __restrict__ output, size_t n_v4) {
+__device__ __forceinline__ float gelu_func(float x) {
+    const float sqrt_2_over_pi = 0.7978845608f;
+    const float coeff = 0.044715f;
+    float inner = sqrt_2_over_pi * (x + coeff * x * x * x);
+    // 0.5 * x * (1 + tanh(inner)) == x / (1 + exp(-2 * inner))
+    return x / (1.0f + __expf(-2.0f * inner));
+}
+
+__global__ void gelu_fast_kernel(const float4* __restrict__ input, float4* __restrict__ output, size_t n_v4) {
     size_t idx = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < n_v4) {
         float4 in_val = input[idx];
         float4 out_val;
-        const float sqrt_2_over_pi = 0.7978845608f;
-        const float coeff = 0.044715f;
-
-        #pragma unroll
-        for (int i = 0; i < 4; ++i) {
-            float x = (i == 0) ? in_val.x : (i == 1) ? in_val.y : (i == 2) ? in_val.z : in_val.w;
-            float inner = sqrt_2_over_pi * (x + coeff * x * x * x);
-            float exp_2y = __expf(2.0f * inner);
-            float fast_tanh = (exp_2y - 1.0f) / (exp_2y + 1.0f);
-            float res = 0.5f * x * (1.0f + fast_tanh);
-            
-            if (i == 0) out_val.x = res;
-            else if (i == 1) out_val.y = res;
-            else if (i == 2) out_val.z = res;
-            else out_val.w = res;
-        }
+        out_val.x = gelu_func(in_val.x);
+        out_val.y = gelu_func(in_val.y);
+        out_val.z = gelu_func(in_val.z);
+        out_val.w = gelu_func(in_val.w);
         output[idx] = out_val;
     }
 }
 
-__global__ void gelu_scalar_kernel(const float* __restrict__ input, float* __restrict__ output, size_t start_idx, size_t n) {
+__global__ void gelu_scalar_tail_kernel(const float* __restrict__ input, float* __restrict__ output, size_t start_idx, size_t n) {
     size_t idx = start_idx + (size_t)blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < n) {
-        float x = input[idx];
-        const float sqrt_2_over_pi = 0.7978845608f;
-        const float coeff = 0.044715f;
-        float inner = sqrt_2_over_pi * (x + coeff * x * x * x);
-        float exp_2y = __expf(2.0f * inner);
-        float fast_tanh = (exp_2y - 1.0f) / (exp_2y + 1.0f);
-        output[idx] = 0.5f * x * (1.0f + fast_tanh);
+        output[idx] = gelu_func(input[idx]);
     }
 }
 
@@ -46,42 +35,72 @@ std::vector<float> GeluCUDA(const std::vector<float>& input) {
     if (n == 0) return {};
 
     std::vector<float> output(n);
-    float* d_in = nullptr;
-    float* d_out = nullptr;
     size_t bytes = n * sizeof(float);
 
+    // Регистрируем память хоста как pinned memory для DMA и асинхронных стримов
+    cudaHostRegister((void*)input.data(), bytes, cudaHostRegisterReadOnly);
+    cudaHostRegister((void*)output.data(), bytes, cudaHostRegisterDefault);
+
+    // Выделение памяти на GPU
+    float *d_in = nullptr, *d_out = nullptr;
     cudaMalloc(&d_in, bytes);
     cudaMalloc(&d_out, bytes);
-    cudaMemcpy(d_in, input.data(), bytes, cudaMemcpyHostToDevice);
 
-    size_t n_v4 = n / 4;
-    size_t rem = n % 4;
+    const int NUM_STREAMS = 4;
+    cudaStream_t streams[NUM_STREAMS];
+    for (int i = 0; i < NUM_STREAMS; ++i) {
+        cudaStreamCreate(&streams[i]);
+    }
+
+    size_t chunkSize = (n + NUM_STREAMS - 1) / NUM_STREAMS;
     int threadsPerBlock = 256;
 
-    if (n_v4 > 0) {
-        int blocksPerGrid = static_cast<int>((n_v4 + threadsPerBlock - 1) / threadsPerBlock);
-        gelu_vectorized_kernel<<<blocksPerGrid, threadsPerBlock>>>(
-            reinterpret_cast<const float4*>(d_in), 
-            reinterpret_cast<float4*>(d_out), 
-            n_v4
-        );
-    }
-    
-    if (rem > 0) {
-        int blocksPerGrid = static_cast<int>((rem + threadsPerBlock - 1) / threadsPerBlock);
-        gelu_scalar_kernel<<<blocksPerGrid, threadsPerBlock>>>(
-            d_in, 
-            d_out, 
-            n - rem, 
-            n
-        );
+    for (int i = 0; i < NUM_STREAMS; ++i) {
+        size_t offset = i * chunkSize;
+        if (offset >= n) break;
+        size_t cur_n = std::min(chunkSize, n - offset);
+        size_t cur_bytes = cur_n * sizeof(float);
+
+        // H2D Transfer (Asynchronous)
+        cudaMemcpyAsync(d_in + offset, input.data() + offset, cur_bytes, cudaMemcpyHostToDevice, streams[i]);
+
+        // Launch Kernel
+        size_t cur_v4 = cur_n / 4;
+        size_t rem = cur_n % 4;
+
+        if (cur_v4 > 0) {
+            int blocks = static_cast<int>((cur_v4 + threadsPerBlock - 1) / threadsPerBlock);
+            gelu_fast_kernel<<<blocks, threadsPerBlock, 0, streams[i]>>>(
+                reinterpret_cast<const float4*>(d_in + offset),
+                reinterpret_cast<float4*>(d_out + offset),
+                cur_v4
+            );
+        }
+        if (rem > 0) {
+            int blocks = static_cast<int>((rem + threadsPerBlock - 1) / threadsPerBlock);
+            gelu_scalar_tail_kernel<<<blocks, threadsPerBlock, 0, streams[i]>>>(
+                d_in + offset,
+                d_out + offset,
+                offset + (cur_v4 * 4),
+                offset + cur_n
+            );
+        }
+
+        // D2H Transfer (Asynchronous)
+        cudaMemcpyAsync(output.data() + offset, d_out + offset, cur_bytes, cudaMemcpyDeviceToHost, streams[i]);
     }
 
-    cudaDeviceSynchronize();
-    cudaMemcpy(output.data(), d_out, bytes, cudaMemcpyDeviceToHost);
-    
+    // Синхронизация и очистка ресурсов
+    for (int i = 0; i < NUM_STREAMS; ++i) {
+        cudaStreamSynchronize(streams[i]);
+        cudaStreamDestroy(streams[i]);
+    }
+
     cudaFree(d_in);
     cudaFree(d_out);
+
+    cudaHostUnregister((void*)input.data());
+    cudaHostUnregister((void*)output.data());
 
     return output;
 }
