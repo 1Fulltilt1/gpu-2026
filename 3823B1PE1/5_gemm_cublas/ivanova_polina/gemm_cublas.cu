@@ -2,6 +2,16 @@
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 #include <vector>
+#include <mutex>
+
+static float* d_a_cache = nullptr;
+static float* d_b_cache = nullptr;
+static float* d_c_cache = nullptr;
+static size_t cached_bytes = 0;
+static cublasHandle_t handle = nullptr;
+static cudaStream_t stream = nullptr;
+static bool initialized = false;
+static std::mutex mtx;
 
 std::vector<float> GemmCUBLAS(const std::vector<float>& a,
                               const std::vector<float>& b,
@@ -12,54 +22,45 @@ std::vector<float> GemmCUBLAS(const std::vector<float>& a,
 
     if (n == 0) return c;
 
-    float *d_a = nullptr;
-    float *d_b = nullptr;
-    float *d_c = nullptr;
+    std::lock_guard<std::mutex> lock(mtx);
+    if (!initialized) {
+        cublasCreate(&handle);
+        cudaStreamCreate(&stream);
+        cublasSetStream(handle, stream);
+        
+        cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH);
+        
+        initialized = true;
+    }
 
-    cudaMalloc(&d_a, bytes);
-    cudaMalloc(&d_b, bytes);
-    cudaMalloc(&d_c, bytes);
+    if (bytes > cached_bytes) {
+        if (d_a_cache) cudaFree(d_a_cache);
+        if (d_b_cache) cudaFree(d_b_cache);
+        if (d_c_cache) cudaFree(d_c_cache);
 
-    cudaHostRegister((void*)a.data(), bytes, cudaHostRegisterDefault);
-    cudaHostRegister((void*)b.data(), bytes, cudaHostRegisterDefault);
-    cudaHostRegister((void*)c.data(), bytes, cudaHostRegisterDefault);
+        cudaMalloc(&d_a_cache, bytes);
+        cudaMalloc(&d_b_cache, bytes);
+        cudaMalloc(&d_c_cache, bytes);
+        cached_bytes = bytes;
+    }
 
-    cudaStream_t stream;
-    cudaStreamCreate(&stream);
-
-    cublasHandle_t handle;
-    cublasCreate(&handle);
-    cublasSetStream(handle, stream);
-
-    cudaMemcpyAsync(d_a, a.data(), bytes, cudaMemcpyHostToDevice, stream);
-    cudaMemcpyAsync(d_b, b.data(), bytes, cudaMemcpyHostToDevice, stream);
+    cudaMemcpyAsync(d_a_cache, a.data(), bytes, cudaMemcpyHostToDevice, stream);
+    cudaMemcpyAsync(d_b_cache, b.data(), bytes, cudaMemcpyHostToDevice, stream);
 
     const float alpha = 1.0f;
     const float beta = 0.0f;
 
-    // Меняем местами матрицы B и A, оставляя CUBLAS_OP_N
     cublasSgemm(handle,
                 CUBLAS_OP_N, CUBLAS_OP_N,
                 n, n, n,
                 &alpha,
-                d_b, n,
-                d_a, n,
+                d_b_cache, n,
+                d_a_cache, n,
                 &beta,
-                d_c, n);
+                d_c_cache, n);
 
-    cudaMemcpyAsync(c.data(), d_c, bytes, cudaMemcpyDeviceToHost, stream);
-
+    cudaMemcpyAsync(c.data(), d_c_cache, bytes, cudaMemcpyDeviceToHost, stream);
     cudaStreamSynchronize(stream);
-
-    cublasDestroy(handle);
-    cudaStreamDestroy(stream);
-    cudaHostUnregister((void*)a.data());
-    cudaHostUnregister((void*)b.data());
-    cudaHostUnregister((void*)c.data());
-
-    cudaFree(d_a);
-    cudaFree(d_b);
-    cudaFree(d_c);
 
     return c;
 }
