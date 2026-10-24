@@ -1,6 +1,7 @@
 #include "softmax_cuda.h"
 
 #include <cuda_runtime.h>
+#include <cfloat>
 
 namespace {
 
@@ -67,6 +68,10 @@ std::vector<float> SoftmaxCUDA(const std::vector<float>& input, int row_count) {
     const int row_size = static_cast<int>(input.size()) / row_count;
 
     std::vector<float> output(input.size());
+
+    if (input.empty()) {
+        return output;
+    }
 
     float* d_input = nullptr;
     float* d_output = nullptr;
