@@ -1,14 +1,17 @@
 #include "softmax_cuda.h"
 #include <cuda_runtime.h>
-#include <vector>
-#include <iostream>
 #include <cmath>
+#include <mutex>
 
-// Для редукции максимума и суммы экспонент используем разделяемая память
-__global__ void softmax_kernel(const float* __restrict__ input, float* __restrict__ output, int cols) {
+static float* d_in_cache = nullptr;
+static float* d_out_cache = nullptr;
+static size_t cached_bytes = 0;
+static cudaStream_t stream = nullptr;
+static bool initialized = false;
+static std::mutex mtx;
 
+__global__ void softmax_optimized_kernel(const float* __restrict__ input, float* __restrict__ output, int cols) {
     extern __shared__ float sdata[];
-
     int row = blockIdx.x;
     int tid = threadIdx.x;
     int block_dim = blockDim.x;
@@ -23,62 +26,83 @@ __global__ void softmax_kernel(const float* __restrict__ input, float* __restric
     sdata[tid] = thread_max;
     __syncthreads();
 
-    for (unsigned int s = block_dim / 2; s > 0; s >>= 1) {
-        if (tid < s) {
-            sdata[tid] = fmaxf(sdata[tid], sdata[tid + s]);
-        }
+    for (unsigned int s = block_dim / 2; s > 32; s >>= 1) {
+        if (tid < s) sdata[tid] = fmaxf(sdata[tid], sdata[tid + s]);
         __syncthreads();
     }
-    float row_max = sdata[0];
+    
+    // Warp-level редукция без синхронизации для последних 32 потоков
+    volatile float* v_sdata = sdata;
+    if (tid < 32) {
+        if (block_dim >= 64) v_sdata[tid] = fmaxf(v_sdata[tid], v_sdata[tid + 32]);
+        if (block_dim >= 32) v_sdata[tid] = fmaxf(v_sdata[tid], v_sdata[tid + 16]);
+        if (block_dim >= 16) v_sdata[tid] = fmaxf(v_sdata[tid], v_sdata[tid + 8]);
+        if (block_dim >= 8)  v_sdata[tid] = fmaxf(v_sdata[tid], v_sdata[tid + 4]);
+        if (block_dim >= 4)  v_sdata[tid] = fmaxf(v_sdata[tid], v_sdata[tid + 2]);
+        if (block_dim >= 2)  v_sdata[tid] = fmaxf(v_sdata[tid], v_sdata[tid + 1]);
+    }
+    __syncthreads();
+    float row_max = v_sdata[0];
     __syncthreads();
 
     float thread_sum = 0.0f;
     for (int col = tid; col < cols; col += block_dim) {
-        thread_sum += expf(row_input[col] - row_max);
+        thread_sum += __expf(row_input[col] - row_max);
     }
     sdata[tid] = thread_sum;
     __syncthreads();
 
-    for (unsigned int s = block_dim / 2; s > 0; s >>= 1) {
-        if (tid < s) {
-            sdata[tid] += sdata[tid + s];
-        }
+    for (unsigned int s = block_dim / 2; s > 32; s >>= 1) {
+        if (tid < s) sdata[tid] += sdata[tid + s];
         __syncthreads();
     }
-    float row_sum = sdata[0];
+
+    if (tid < 32) {
+        if (block_dim >= 64) v_sdata[tid] += v_sdata[tid + 32];
+        if (block_dim >= 32) v_sdata[tid] += v_sdata[tid + 16];
+        if (block_dim >= 16) v_sdata[tid] += v_sdata[tid + 8];
+        if (block_dim >= 8)  v_sdata[tid] += v_sdata[tid + 4];
+        if (block_dim >= 4)  v_sdata[tid] += v_sdata[tid + 2];
+        if (block_dim >= 2)  v_sdata[tid] += v_sdata[tid + 1];
+    }
+    __syncthreads();
+    float row_sum = v_sdata[0];
     __syncthreads();
 
+    float inv_sum = __fdividef(1.0f, row_sum);
     for (int col = tid; col < cols; col += block_dim) {
-        row_output[col] = expf(row_input[col] - row_max) / row_sum;
+        row_output[col] = __expf(row_input[col] - row_max) * inv_sum;
     }
 }
 
 std::vector<float> SoftmaxCUDA(const std::vector<float>& input, int row_count) {
     int size = input.size();
     int cols = size / row_count;
+    size_t bytes = size * sizeof(float);
     std::vector<float> output(size);
+    if (size == 0) return output;
 
-    float *d_input = nullptr;
-    float *d_output = nullptr;
+    std::lock_guard<std::mutex> lock(mtx);
+    if (!initialized) {
+        cudaStreamCreate(&stream);
+        initialized = true;
+    }
 
-    cudaMalloc(&d_input, size * sizeof(float));
-    cudaMalloc(&d_output, size * sizeof(float));
+    if (bytes > cached_bytes) {
+        if (d_in_cache) cudaFree(d_in_cache);
+        if (d_out_cache) cudaFree(d_out_cache);
+        cudaMalloc(&d_in_cache, bytes);
+        cudaMalloc(&d_out_cache, bytes);
+        cached_bytes = bytes;
+    }
 
-    cudaMemcpy(d_input, input.data(), size * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpyAsync(d_in_cache, input.data(), bytes, cudaMemcpyHostToDevice, stream);
 
-    // Используем 1024 потока на блок, так как размер строки - 16384 - гарантированно больше и является степенью двойки
     int threads_per_block = 1024;
-    int num_blocks = row_count;
-    size_t shared_mem_size = threads_per_block * sizeof(float);
+    softmax_optimized_kernel<<<row_count, threads_per_block, threads_per_block * sizeof(float), stream>>>(d_in_cache, d_out_cache, cols);
 
-    softmax_kernel<<<num_blocks, threads_per_block, shared_mem_size>>>(d_input, d_output, cols);
-
-    cudaDeviceSynchronize();
-
-    cudaMemcpy(output.data(), d_output, size * sizeof(float), cudaMemcpyDeviceToHost);
-
-    cudaFree(d_input);
-    cudaFree(d_output);
+    cudaMemcpyAsync(output.data(), d_out_cache, bytes, cudaMemcpyDeviceToHost, stream);
+    cudaStreamSynchronize(stream);
 
     return output;
 }
