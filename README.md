@@ -634,6 +634,7 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 |3823B1PE2|kotelnikova_anastasia|0.2728|3|
 |3823B1PE1|golovanov_daniil|0.2739|5|
 |3823B1PE2|zorin_danila_artemovich|0.2745|2|
+|3823B1PE4|tsarkov_klim|0.2753|4|
 
 ## 7_layernorm_pycuda (8192x16384 elements)
 |Group|Name|Result|Rank|
@@ -757,7 +758,7 @@ Passed: 3
 |3823B1PE4|peryashkin_vasily|6/8|355|
 |3823B1PE4|remizov_kirill|4/8|247|
 |3823B1PE4|romanov_michail|2/8|107|
-|3823B1PE4|tsarkov_klim|5/8|276|
+|3823B1PE4|tsarkov_klim|6/8|334|
 |3823B1PE4|urin_oleg|2/8|116|
 |3823B1PE4|zaharov_gleb|6/8|357|
 
