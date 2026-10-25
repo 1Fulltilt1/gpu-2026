@@ -25,30 +25,26 @@ __global__ void GeluKernel(const float* input,
     }
 }
 
-float* GetBuffer(float*& buffer, int required_size) {
-    static int allocated_size = 0;
+struct DeviceBuffer {
+    float* pointer = nullptr;
+    int capacity = 0;
+};
 
-    if (required_size > allocated_size) {
-        if (buffer != nullptr) {
-            cudaFree(buffer);
+float* GetBuffer(DeviceBuffer& buffer, int required_size) {
+    if (required_size > buffer.capacity) {
+        if (buffer.pointer != nullptr) {
+            cudaFree(buffer.pointer);
         }
 
-        cudaMalloc(&buffer, required_size * sizeof(float));
-        allocated_size = required_size;
+        cudaMalloc(&buffer.pointer, required_size * sizeof(float));
+        buffer.capacity = required_size;
     }
 
-    return buffer;
+    return buffer.pointer;
 }
 
-float* GetInputBuffer(int size) {
-    static float* buffer = nullptr;
-    return GetBuffer(buffer, size);
-}
-
-float* GetOutputBuffer(int size) {
-    static float* buffer = nullptr;
-    return GetBuffer(buffer, size);
-}
+DeviceBuffer input_buffer;
+DeviceBuffer output_buffer;
 
 } // namespace
 
@@ -60,8 +56,8 @@ std::vector<float> GeluCUDA(const std::vector<float>& input) {
         return output;
     }
 
-    float* d_input = GetInputBuffer(size);
-    float* d_output = GetOutputBuffer(size);
+    float* d_input = GetBuffer(input_buffer, size);
+    float* d_output = GetBuffer(output_buffer, size);
 
     cudaMemcpy(d_input, input.data(),
                size * sizeof(float),
