@@ -1,118 +1,171 @@
 #include "naive_gemm_cuda.h"
 #include <cuda_runtime.h>
+#include <iostream>
+#include <vector>
+#include <chrono>
 #include <algorithm>
 
-// Каждый блок 16x16 потоков вычисляет тайл размером 32x32 в матрице C.
-// Каждый поток вычисляет подсетку 2x2 элементов.
-#define TILE_DIM 32
-#define THREAD_DIM 16
-#define SHMEM_PAD 1
+// Размеры блока и тайлов для оптимизации доступа к глобальной и разделяемой памяти
+#define BM 64
+#define BN 64
+#define BK 8
+#define TM 4
+#define TN 4
 
-__global__ void ultra_gemm_kernel(const float* __restrict__ d_a,
-                                  const float* __restrict__ d_b,
-                                  float* __restrict__ d_c,
-                                  int n) {
-    __shared__ float s_a[TILE_DIM][TILE_DIM + SHMEM_PAD];
-    __shared__ float s_b[TILE_DIM][TILE_DIM + SHMEM_PAD];
+// CUDA-ядро для оптимизированного умножения матриц с использованием Shared Memory и Register Tiling
+__global__ void __launch_bounds__(256) gemm_optimized_kernel(
+    const float* __restrict__ A,
+    const float* __restrict__ B,
+    float* __restrict__ C,
+    int N) 
+{
+    int bx = blockIdx.x;
+    int by = blockIdx.y;
 
-    int tx = threadIdx.x;
-    int ty = threadIdx.y;
+    int tid = threadIdx.y * blockDim.x + threadIdx.x; // от 0 до 255 (256 потоков)
 
-    int row = blockIdx.y * TILE_DIM + ty;
-    int col = blockIdx.x * TILE_DIM + tx;
+    // Разделяемая память для тайлов матриц A и B (с транспонированием A для избежания bank conflicts)
+    __shared__ float sA[BK][BM];
+    __shared__ float sB[BK][BN];
 
-    float c_sum[2][2] = { {0.0f, 0.0f}, {0.0f, 0.0f} };
+    int threadRow = tid / (BN / TN); // 256 / 16 = 16 строк на поток
+    int threadCol = tid % (BN / TN); // 16 колонок
 
-    int numTiles = (n + TILE_DIM - 1) / TILE_DIM;
+    // Смещение указателей на начало текущего блока
+    int globalRowStart = by * BM;
+    int globalColStart = bx * BN;
 
-    for (int t = 0; t < numTiles; ++t) {
-        #pragma unroll
-        for (int i = 0; i < 2; ++i) {
-            #pragma unroll
-            for (int j = 0; j < 2; ++j) {
-                int a_row = row + i * THREAD_DIM;
-                int a_col = t * TILE_DIM + tx + j * THREAD_DIM;
-                
-                int b_row = t * TILE_DIM + ty + i * THREAD_DIM;
-                int b_col = col + j * THREAD_DIM;
+    // Аккумуляторы в регистрах потока для подсчета блока TM x TN
+    float accum[TM][TN] = {0.0f};
 
-                s_a[ty + i * THREAD_DIM][tx + j * THREAD_DIM] = 
-                    (a_row < n && a_col < n) ? d_a[a_row * n + a_col] : 0.0f;
+    // Цикл по всем тайлам вдоль измерения K
+    for (int bk = 0; bk < N; bk += BK) {
+        // Кооперативная загрузка тайла матрицы A из глобальной памяти в sA с использованием float4
+        int a_inner_row = tid / 2;     // 128 строк
+        int a_inner_col = (tid % 2) * 4; // столбцы по 4 элемента
 
-                s_b[ty + i * THREAD_DIM][tx + j * THREAD_DIM] = 
-                    (b_row < n && b_col < n) ? d_b[b_row * n + b_col] : 0.0f;
+        if ((globalRowStart + a_inner_row) < N && (bk + a_inner_col + 3) < N) {
+            float4 a_vec = *reinterpret_cast<const float4*>(&A[(globalRowStart + a_inner_row) * N + (bk + a_inner_col)]);
+            sA[a_inner_col + 0][a_inner_row] = a_vec.x;
+            sA[a_inner_col + 1][a_inner_row] = a_vec.y;
+            sA[a_inner_col + 2][a_inner_row] = a_vec.z;
+            sA[a_inner_col + 3][a_inner_row] = a_vec.w;
+        } else {
+            // Безопасная обработка границ
+            for (int i = 0; i < 4; ++i) {
+                int r = globalRowStart + a_inner_row;
+                int c = bk + a_inner_col + i;
+                sA[a_inner_col + i][a_inner_row] = (r < N && c < N) ? A[r * N + c] : 0.0f;
             }
         }
 
-        __syncthreads();
+        // Кооперативная загрузка тайла матрицы B из глобальной памяти в sB с использованием float4
+        int b_inner_row = tid / 16;     // 16 строк
+        int b_inner_col = (tid % 16) * 4; // столбцы
 
-        #pragma unroll
-        for (int k = 0; k < TILE_DIM; ++k) {
-
-            float a0 = s_a[ty][k];
-            float a1 = s_a[ty + THREAD_DIM][k];
-
-            float b0 = s_b[k][tx];
-            float b1 = s_b[k][tx + THREAD_DIM];
-
-            c_sum[0][0] = fmaf(a0, b0, c_sum[0][0]);
-            c_sum[0][1] = fmaf(a0, b1, c_sum[0][1]);
-            c_sum[1][0] = fmaf(a1, b0, c_sum[1][0]);
-            c_sum[1][1] = fmaf(a1, b1, c_sum[1][1]);
+        if (b_inner_row < BK && (globalColStart + b_inner_col + 3) < N && (bk + b_inner_row) < N) {
+            float4 b_vec = *reinterpret_cast<const float4*>(&B[(bk + b_inner_row) * N + (globalColStart + b_inner_col)]);
+            *reinterpret_cast<float4*>(&sB[b_inner_row][b_inner_col]) = b_vec;
+        } else {
+            for (int i = 0; i < 4; ++i) {
+                int r = bk + b_inner_row;
+                int c = globalColStart + b_inner_col + i;
+                if (b_inner_row < BK) {
+                    sB[b_inner_row][b_inner_col + i] = (r < N && c < N) ? B[r * N + c] : 0.0f;
+                }
+            }
         }
 
+        // Синхронизация потоков, чтобы убедиться, что весь тайл загружен в разделяемую память
+        __syncthreads();
+
+        // Вычисление произведения тайлов с разверткой циклов (#pragma unroll) и FMA инструкциями
+        #pragma unroll
+        for (int k = 0; k < BK; ++k) {
+            float regA[TM];
+            float regB[TN];
+
+            #pragma unroll
+            for (int i = 0; i < TM; ++i) {
+                regA[i] = sA[k][threadRow * TM + i];
+            }
+
+            #pragma unroll
+            for (int j = 0; j < TN; ++j) {
+                regB[j] = sB[k][threadCol * TN + j];
+            }
+
+            #pragma unroll
+            for (int i = 0; i < TM; ++i) {
+                #pragma unroll
+                for (int j = 0; j < TN; ++j) {
+                    accum[i][j] = fmaf(regA[i], regB[j], accum[i][j]);
+                }
+            }
+        }
+
+        // Синхронизация перед переходом к загрузке следующего тайла
         __syncthreads();
     }
 
+    // Запись результатов из регистров обратно в глобальную память матрицы C с проверкой границ
+    int outRowBase = globalRowStart + threadRow * TM;
+    int outColBase = globalColStart + threadCol * TN;
+
     #pragma unroll
-    for (int i = 0; i < 2; ++i) {
+    for (int i = 0; i < TM; ++i) {
         #pragma unroll
-        for (int j = 0; j < 2; ++j) {
-            int out_row = row + i * THREAD_DIM;
-            int out_col = col + j * THREAD_DIM;
-            if (out_row < n && out_col < n) {
-                d_c[out_row * n + out_col] = c_sum[i][j];
+        for (int j = 0; j < TN; ++j) {
+            int row = outRowBase + i;
+            int col = outColBase + j;
+            if (row < N && col < N) {
+                C[row * N + col] = accum[i][j];
             }
         }
     }
 }
 
+// Основная функция-обертка для вызова из хост-кода (CPU)
 std::vector<float> NaiveGemmCUDA(const std::vector<float>& a,
                                  const std::vector<float>& b,
                                  int n) {
-    int size = n * n;
+    size_t size = static_cast<size_t>(n) * n;
     size_t bytes = size * sizeof(float);
     std::vector<float> c(size, 0.0f);
 
-    float *d_a = nullptr;
-    float *d_b = nullptr;
-    float *d_c = nullptr;
+    float *d_a = nullptr, *d_b = nullptr, *d_c = nullptr;
 
+    // Выделение памяти на GPU
     cudaMalloc(&d_a, bytes);
     cudaMalloc(&d_b, bytes);
     cudaMalloc(&d_c, bytes);
 
-    cudaHostRegister((void*)a.data(), bytes, cudaHostRegisterDefault);
-    cudaHostRegister((void*)b.data(), bytes, cudaHostRegisterDefault);
+    // Закрепление хост-памяти (Pinned Memory) для ускорения асинхронных пересылок PCI-e
+    cudaHostRegister((void*)a.data(), bytes, cudaHostRegisterReadOnly);
+    cudaHostRegister((void*)b.data(), bytes, cudaHostRegisterReadOnly);
     cudaHostRegister((void*)c.data(), bytes, cudaHostRegisterDefault);
 
     cudaStream_t stream;
     cudaStreamCreate(&stream);
 
+    // Асинхронная передача данных с хоста на устройство
     cudaMemcpyAsync(d_a, a.data(), bytes, cudaMemcpyHostToDevice, stream);
     cudaMemcpyAsync(d_b, b.data(), bytes, cudaMemcpyHostToDevice, stream);
 
-    // Конфигурация сетки: блоки 16x16, но каждый обрабатывает 32x32 элементы
-    dim3 threadsPerBlock(THREAD_DIM, THREAD_DIM);
-    dim3 numBlocks((n + TILE_DIM - 1) / TILE_DIM,
-                   (n + TILE_DIM - 1) / TILE_DIM);
+    // Конфигурация запуска сетки CUDA (блок 16x16 потоков = 256 потоков)
+    dim3 threadsPerBlock(16, 16);
+    dim3 numBlocks((n + BN - 1) / BN, (n + BM - 1) / BM);
 
-    ultra_gemm_kernel<<<numBlocks, threadsPerBlock, 0, stream>>>(d_a, d_b, d_c, n);
+    // Запуск ядра в созданном стриме
+    gemm_optimized_kernel<<<numBlocks, threadsPerBlock, 0, stream>>>(d_a, d_b, d_c, n);
 
+    // Асинхронное копирование результата обратно на хост
     cudaMemcpyAsync(c.data(), d_c, bytes, cudaMemcpyDeviceToHost, stream);
 
+    // Ожидание завершения всех операций в стриме
     cudaStreamSynchronize(stream);
 
+    // Очистка ресурсов
     cudaStreamDestroy(stream);
     cudaHostUnregister((void*)a.data());
     cudaHostUnregister((void*)b.data());
