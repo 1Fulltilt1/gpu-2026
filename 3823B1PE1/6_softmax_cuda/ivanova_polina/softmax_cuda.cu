@@ -1,7 +1,7 @@
-#include "softmax_cuda.h"
-#include <cuda_runtime.h>
-#include <cmath>
-#include <mutex>
+# include "softmax_cuda.h"
+# include <cuda_runtime.h>
+# include <cmath>
+# include <mutex>
 
 static float* d_in_cache = nullptr;
 static float* d_out_cache = nullptr;
@@ -10,68 +10,114 @@ static cudaStream_t stream = nullptr;
 static bool initialized = false;
 static std::mutex mtx;
 
+__device__ __forceinline__ float warpReduceMax(float val) {
+    for (int offset = 16; offset > 0; offset /= 2) {
+        val = fmaxf(val, __shfl_down_sync(0xffffffff, val, offset));
+    }
+    return val;
+}
+
+__device__ __forceinline__ float warpReduceSum(float val) {
+    for (int offset = 16; offset > 0; offset /= 2) {
+        val += __shfl_down_sync(0xffffffff, val, offset);
+    }
+    return val;
+}
+
 __global__ void softmax_optimized_kernel(const float* __restrict__ input, float* __restrict__ output, int cols) {
-    extern __shared__ float sdata[];
+    __shared__ float shared_scratch[32];
+
     int row = blockIdx.x;
     int tid = threadIdx.x;
+    int lane = tid % 32;
+    int wid = tid / 32;
     int block_dim = blockDim.x;
-    
+
     const float* row_input = input + row * cols;
     float* row_output = output + row * cols;
 
     float thread_max = -INFINITY;
-    for (int col = tid; col < cols; col += block_dim) {
-        thread_max = fmaxf(thread_max, row_input[col]);
+
+    if (cols % 4 == 0) {
+        const float4* row_input_v4 = reinterpret_cast<const float4*>(row_input);
+        int cols_v4 = cols / 4;
+        for (int col = tid; col < cols_v4; col += block_dim) {
+            float4 val = row_input_v4[col];
+            thread_max = fmaxf(thread_max, fmaxf(fmaxf(val.x, val.y), fmaxf(val.z, val.w)));
+        }
+    } else {
+        for (int col = tid; col < cols; col += block_dim) {
+            thread_max = fmaxf(thread_max, row_input[col]);
+        }
     }
-    sdata[tid] = thread_max;
+
+    float warp_max = warpReduceMax(thread_max);
+    if (lane == 0) {
+        shared_scratch[wid] = warp_max;
+    }
     __syncthreads();
 
-    for (unsigned int s = block_dim / 2; s > 32; s >>= 1) {
-        if (tid < s) sdata[tid] = fmaxf(sdata[tid], sdata[tid + s]);
-        __syncthreads();
-    }
-    
-    // Warp-level редукция без синхронизации для последних 32 потоков
-    volatile float* v_sdata = sdata;
-    if (tid < 32) {
-        if (block_dim >= 64) v_sdata[tid] = fmaxf(v_sdata[tid], v_sdata[tid + 32]);
-        if (block_dim >= 32) v_sdata[tid] = fmaxf(v_sdata[tid], v_sdata[tid + 16]);
-        if (block_dim >= 16) v_sdata[tid] = fmaxf(v_sdata[tid], v_sdata[tid + 8]);
-        if (block_dim >= 8)  v_sdata[tid] = fmaxf(v_sdata[tid], v_sdata[tid + 4]);
-        if (block_dim >= 4)  v_sdata[tid] = fmaxf(v_sdata[tid], v_sdata[tid + 2]);
-        if (block_dim >= 2)  v_sdata[tid] = fmaxf(v_sdata[tid], v_sdata[tid + 1]);
+    float block_max = (tid < 32) ? shared_scratch[lane] : -INFINITY;
+    if (wid == 0) {
+        block_max = warpReduceMax(block_max);
+        if (lane == 0) {
+            shared_scratch[0] = block_max;
+        }
     }
     __syncthreads();
-    float row_max = v_sdata[0];
-    __syncthreads();
+    float row_max = shared_scratch[0];
 
     float thread_sum = 0.0f;
-    for (int col = tid; col < cols; col += block_dim) {
-        thread_sum += __expf(row_input[col] - row_max);
+    if (cols % 4 == 0) {
+        const float4* row_input_v4 = reinterpret_cast<const float4*>(row_input);
+        int cols_v4 = cols / 4;
+        for (int col = tid; col < cols_v4; col += block_dim) {
+            float4 val = row_input_v4[col];
+            thread_sum += __expf(val.x - row_max) +
+                          __expf(val.y - row_max) +
+                          __expf(val.z - row_max) +
+                          __expf(val.w - row_max);
+        }
+    } else {
+        for (int col = tid; col < cols; col += block_dim) {
+            thread_sum += __expf(row_input[col] - row_max);
+        }
     }
-    sdata[tid] = thread_sum;
+
+    float warp_sum = warpReduceSum(thread_sum);
+    if (lane == 0) {
+        shared_scratch[wid] = warp_sum;
+    }
     __syncthreads();
 
-    for (unsigned int s = block_dim / 2; s > 32; s >>= 1) {
-        if (tid < s) sdata[tid] += sdata[tid + s];
-        __syncthreads();
-    }
-
-    if (tid < 32) {
-        if (block_dim >= 64) v_sdata[tid] += v_sdata[tid + 32];
-        if (block_dim >= 32) v_sdata[tid] += v_sdata[tid + 16];
-        if (block_dim >= 16) v_sdata[tid] += v_sdata[tid + 8];
-        if (block_dim >= 8)  v_sdata[tid] += v_sdata[tid + 4];
-        if (block_dim >= 4)  v_sdata[tid] += v_sdata[tid + 2];
-        if (block_dim >= 2)  v_sdata[tid] += v_sdata[tid + 1];
+    float block_sum = (tid < 32) ? shared_scratch[lane] : 0.0f;
+    if (wid == 0) {
+        block_sum = warpReduceSum(block_sum);
+        if (lane == 0) {
+            shared_scratch[0] = block_sum;
+        }
     }
     __syncthreads();
-    float row_sum = v_sdata[0];
-    __syncthreads();
+    float row_sum = shared_scratch[0];
 
     float inv_sum = __fdividef(1.0f, row_sum);
-    for (int col = tid; col < cols; col += block_dim) {
-        row_output[col] = __expf(row_input[col] - row_max) * inv_sum;
+    if (cols % 4 == 0) {
+        const float4* row_input_v4 = reinterpret_cast<const float4*>(row_input);
+        float4* row_output_v4 = reinterpret_cast<float4*>(row_output);
+        int cols_v4 = cols / 4;
+        for (int col = tid; col < cols_v4; col += block_dim) {
+            float4 val = row_input_v4[col];
+            float4 out_val;
+            out_val.x = __expf(val.x - row_max) * inv_sum;
+            out_val.y = __expf(val.y - row_max) * inv_sum;
+            out_val.z = __expf(val.z - row_max) * inv_sum;
+            out_val.w = __expf(val.w - row_max) * inv_sum;
+            row_output_v4[col] = out_val;
+        }
+    } else {
+        for (int col = tid; col < cols; col += block_dim) {
+            row_output[col] = __expf(row_input[col] - row_max) * inv_sum;
+        }
     }
 }
 
@@ -96,13 +142,22 @@ std::vector<float> SoftmaxCUDA(const std::vector<float>& input, int row_count) {
         cached_bytes = bytes;
     }
 
-    cudaMemcpyAsync(d_in_cache, input.data(), bytes, cudaMemcpyHostToDevice, stream);
+    float* h_in_ptr = const_cast<float*>(input.data());
+    float* h_out_ptr = output.data();
+
+    cudaHostRegister(h_in_ptr, bytes, cudaHostRegisterDefault);
+    cudaHostRegister(h_out_ptr, bytes, cudaHostRegisterDefault);
+
+    cudaMemcpyAsync(d_in_cache, h_in_ptr, bytes, cudaMemcpyHostToDevice, stream);
 
     int threads_per_block = 1024;
-    softmax_optimized_kernel<<<row_count, threads_per_block, threads_per_block * sizeof(float), stream>>>(d_in_cache, d_out_cache, cols);
+    softmax_optimized_kernel<<<row_count, threads_per_block, 0, stream>>>(d_in_cache, d_out_cache, cols);
 
-    cudaMemcpyAsync(output.data(), d_out_cache, bytes, cudaMemcpyDeviceToHost, stream);
+    cudaMemcpyAsync(h_out_ptr, d_out_cache, bytes, cudaMemcpyDeviceToHost, stream);
     cudaStreamSynchronize(stream);
+
+    cudaHostUnregister(h_in_ptr);
+    cudaHostUnregister(h_out_ptr);
 
     return output;
 }
