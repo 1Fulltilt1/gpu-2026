@@ -5,6 +5,45 @@
 
 #include <cstddef>
 
+namespace {
+
+// cuBLAS handle and device buffers are created once and reused between calls,
+// so no redundant device memory allocation happens during measurements.
+struct CublasContext {
+    cublasHandle_t handle = nullptr;
+    float* dev_a = nullptr;
+    float* dev_b = nullptr;
+    float* dev_c = nullptr;
+    std::size_t capacity = 0;
+
+    CublasContext() { cublasCreate(&handle); }
+
+    ~CublasContext() {
+        cudaFree(dev_a);
+        cudaFree(dev_b);
+        cudaFree(dev_c);
+        if (handle != nullptr) cublasDestroy(handle);
+    }
+
+    void Reserve(std::size_t count) {
+        if (count <= capacity) return;
+        cudaFree(dev_a);
+        cudaFree(dev_b);
+        cudaFree(dev_c);
+        cudaMalloc(&dev_a, count * sizeof(float));
+        cudaMalloc(&dev_b, count * sizeof(float));
+        cudaMalloc(&dev_c, count * sizeof(float));
+        capacity = count;
+    }
+};
+
+CublasContext& GetContext() {
+    static CublasContext context;
+    return context;
+}
+
+}  // namespace
+
 std::vector<float> GemmCUBLAS(const std::vector<float>& a,
                               const std::vector<float>& b,
                               int n) {
@@ -13,33 +52,21 @@ std::vector<float> GemmCUBLAS(const std::vector<float>& a,
     if (a.size() < count || b.size() < count) return {};
     const std::size_t bytes = count * sizeof(float);
 
-    cublasHandle_t handle = nullptr;
-    cublasCreate(&handle);
+    CublasContext& ctx = GetContext();
+    ctx.Reserve(count);
 
-    float* dev_a = nullptr;
-    float* dev_b = nullptr;
-    float* dev_c = nullptr;
-    cudaMalloc(&dev_a, bytes);
-    cudaMalloc(&dev_b, bytes);
-    cudaMalloc(&dev_c, bytes);
-
-    cudaMemcpy(dev_a, a.data(), bytes, cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_b, b.data(), bytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(ctx.dev_a, a.data(), bytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(ctx.dev_b, b.data(), bytes, cudaMemcpyHostToDevice);
 
     // cuBLAS works with column-major matrices: a row-major matrix X is seen as
     // X^T. Therefore row-major C = A * B is the same as column-major
     // C^T = B^T * A^T, so passing B and then A avoids any explicit transpose.
     const float alpha = 1.0f;
     const float beta = 0.0f;
-    cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, n, n, n,
-                &alpha, dev_b, n, dev_a, n, &beta, dev_c, n);
+    cublasSgemm(ctx.handle, CUBLAS_OP_N, CUBLAS_OP_N, n, n, n,
+                &alpha, ctx.dev_b, n, ctx.dev_a, n, &beta, ctx.dev_c, n);
 
     std::vector<float> result(count);
-    cudaMemcpy(result.data(), dev_c, bytes, cudaMemcpyDeviceToHost);
-
-    cudaFree(dev_a);
-    cudaFree(dev_b);
-    cudaFree(dev_c);
-    cublasDestroy(handle);
+    cudaMemcpy(result.data(), ctx.dev_c, bytes, cudaMemcpyDeviceToHost);
     return result;
 }
