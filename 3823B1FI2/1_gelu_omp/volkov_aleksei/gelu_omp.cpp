@@ -3,6 +3,10 @@
 #include <cstddef>
 
 std::vector<float> GeluOMP(const std::vector<float>& input) {
+    if (input.empty()) {
+        return {};
+    }
+
     const std::size_t n = input.size();
     std::vector<float> output(n);
 
