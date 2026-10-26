@@ -4,6 +4,7 @@
 
 #include <cfloat>
 #include <cstddef>
+#include <cstring>
 #include <vector>
 
 namespace {
@@ -65,7 +66,9 @@ __device__ __forceinline__ MaxSum BlockReduce(MaxSum v, MaxSum* warp_results) {
     return result;
 }
 
-// One CUDA block processes one row.
+// One CUDA block processes one row. Rows whose length is a multiple of four are
+// handled with float4 loads/stores, the remaining ones with the scalar path.
+template <bool Vectorized>
 __global__ void SoftmaxKernel(const float* __restrict__ input, float* __restrict__ output, int row_size) {
     __shared__ MaxSum warp_results[kMaxThreads / kWarpSize];
 
@@ -74,16 +77,78 @@ __global__ void SoftmaxKernel(const float* __restrict__ input, float* __restrict
     float* row_out = output + base;
 
     MaxSum local{-FLT_MAX, 0.0f};
-    for (int i = threadIdx.x; i < row_size; i += blockDim.x) {
-        AddElement(local, row_in[i]);
+    if (Vectorized) {
+        const int vec_count = row_size / 4;
+        const float4* row_in4 = reinterpret_cast<const float4*>(row_in);
+        for (int i = threadIdx.x; i < vec_count; i += blockDim.x) {
+            const float4 v = row_in4[i];
+            AddElement(local, v.x);
+            AddElement(local, v.y);
+            AddElement(local, v.z);
+            AddElement(local, v.w);
+        }
+    } else {
+        for (int i = threadIdx.x; i < row_size; i += blockDim.x) {
+            AddElement(local, row_in[i]);
+        }
     }
 
     const MaxSum row = BlockReduce(local, warp_results);
     const float inv_sum = (row.sum > 0.0f) ? 1.0f / row.sum : 0.0f;
 
-    for (int i = threadIdx.x; i < row_size; i += blockDim.x) {
-        row_out[i] = __expf(row_in[i] - row.max) * inv_sum;
+    if (Vectorized) {
+        const int vec_count = row_size / 4;
+        const float4* row_in4 = reinterpret_cast<const float4*>(row_in);
+        float4* row_out4 = reinterpret_cast<float4*>(row_out);
+        for (int i = threadIdx.x; i < vec_count; i += blockDim.x) {
+            const float4 v = row_in4[i];
+            const float4 r = make_float4(__expf(v.x - row.max) * inv_sum,
+                                         __expf(v.y - row.max) * inv_sum,
+                                         __expf(v.z - row.max) * inv_sum,
+                                         __expf(v.w - row.max) * inv_sum);
+            row_out4[i] = r;
+        }
+    } else {
+        for (int i = threadIdx.x; i < row_size; i += blockDim.x) {
+            row_out[i] = __expf(row_in[i] - row.max) * inv_sum;
+        }
     }
+}
+
+// Device buffers and a pinned host staging buffer are mapped once and reused,
+// so no memory is allocated/freed during the measured runs.
+struct Buffers {
+    cudaStream_t stream = nullptr;
+    float* dev_input = nullptr;
+    float* dev_output = nullptr;
+    float* host_output = nullptr;
+    std::size_t capacity = 0;
+
+    Buffers() { cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking); }
+
+    ~Buffers() {
+        cudaFree(dev_input);
+        cudaFree(dev_output);
+        if (host_output != nullptr) cudaFreeHost(host_output);
+        if (stream != nullptr) cudaStreamDestroy(stream);
+    }
+
+    void Reserve(std::size_t count) {
+        if (count <= capacity) return;
+        cudaFree(dev_input);
+        cudaFree(dev_output);
+        if (host_output != nullptr) cudaFreeHost(host_output);
+
+        cudaMalloc(&dev_input, count * sizeof(float));
+        cudaMalloc(&dev_output, count * sizeof(float));
+        cudaMallocHost(&host_output, count * sizeof(float));
+        capacity = count;
+    }
+};
+
+Buffers& GetBuffers() {
+    static Buffers buffers;
+    return buffers;
 }
 
 }  // namespace
@@ -96,25 +161,31 @@ std::vector<float> SoftmaxCUDA(const std::vector<float>& input, int row_count) {
     if (row_size == 0) return std::vector<float>(count);
 
     const std::size_t bytes = count * sizeof(float);
+    Buffers& buf = GetBuffers();
+    buf.Reserve(count);
 
-    float* dev_input = nullptr;
-    float* dev_output = nullptr;
-    cudaMalloc(&dev_input, bytes);
-    cudaMalloc(&dev_output, bytes);
-
-    cudaMemcpy(dev_input, input.data(), bytes, cudaMemcpyHostToDevice);
+    cudaMemcpyAsync(buf.dev_input, input.data(), bytes, cudaMemcpyHostToDevice, buf.stream);
 
     int block_size = kWarpSize;
     while (block_size < kMaxThreads && static_cast<std::size_t>(block_size) < row_size) {
         block_size <<= 1;
     }
 
-    SoftmaxKernel<<<row_count, block_size>>>(dev_input, dev_output, static_cast<int>(row_size));
+    const bool vectorized = (row_size % 4 == 0);
+    const int row_size_int = static_cast<int>(row_size);
+    if (vectorized) {
+        SoftmaxKernel<true><<<row_count, block_size, 0, buf.stream>>>(
+            buf.dev_input, buf.dev_output, row_size_int);
+    } else {
+        SoftmaxKernel<false><<<row_count, block_size, 0, buf.stream>>>(
+            buf.dev_input, buf.dev_output, row_size_int);
+    }
 
+    // The kernel is asynchronous, so the result vector is allocated on the host
+    // while the GPU is still computing.
     std::vector<float> result(count);
-    cudaMemcpy(result.data(), dev_output, bytes, cudaMemcpyDeviceToHost);
-
-    cudaFree(dev_input);
-    cudaFree(dev_output);
+    cudaMemcpyAsync(buf.host_output, buf.dev_output, bytes, cudaMemcpyDeviceToHost, buf.stream);
+    cudaStreamSynchronize(buf.stream);
+    std::memcpy(result.data(), buf.host_output, bytes);
     return result;
 }
