@@ -7,22 +7,28 @@
 
 namespace {
 
-// cuBLAS handle and device buffers are created once and reused between calls,
-// so no redundant device memory allocation happens during measurements.
+// cuBLAS handle, stream and device buffers are created once and reused between
+// calls, so no redundant device memory allocation happens during measurements.
 struct CublasContext {
     cublasHandle_t handle = nullptr;
+    cudaStream_t stream = nullptr;
     float* dev_a = nullptr;
     float* dev_b = nullptr;
     float* dev_c = nullptr;
     std::size_t capacity = 0;
 
-    CublasContext() { cublasCreate(&handle); }
+    CublasContext() {
+        cublasCreate(&handle);
+        cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
+        cublasSetStream(handle, stream);
+    }
 
     ~CublasContext() {
         cudaFree(dev_a);
         cudaFree(dev_b);
         cudaFree(dev_c);
         if (handle != nullptr) cublasDestroy(handle);
+        if (stream != nullptr) cudaStreamDestroy(stream);
     }
 
     void Reserve(std::size_t count) {
@@ -55,8 +61,9 @@ std::vector<float> GemmCUBLAS(const std::vector<float>& a,
     CublasContext& ctx = GetContext();
     ctx.Reserve(count);
 
-    cudaMemcpy(ctx.dev_a, a.data(), bytes, cudaMemcpyHostToDevice);
-    cudaMemcpy(ctx.dev_b, b.data(), bytes, cudaMemcpyHostToDevice);
+    // Both input matrices are stored by rows on the host.
+    cudaMemcpyAsync(ctx.dev_a, a.data(), bytes, cudaMemcpyHostToDevice, ctx.stream);
+    cudaMemcpyAsync(ctx.dev_b, b.data(), bytes, cudaMemcpyHostToDevice, ctx.stream);
 
     // cuBLAS works with column-major matrices: a row-major matrix X is seen as
     // X^T. Therefore row-major C = A * B is the same as column-major
@@ -66,7 +73,10 @@ std::vector<float> GemmCUBLAS(const std::vector<float>& a,
     cublasSgemm(ctx.handle, CUBLAS_OP_N, CUBLAS_OP_N, n, n, n,
                 &alpha, ctx.dev_b, n, ctx.dev_a, n, &beta, ctx.dev_c, n);
 
+    // The cuBLAS call is asynchronous, so the result buffer is allocated on the
+    // host while the GPU is still doing the multiplication.
     std::vector<float> result(count);
-    cudaMemcpy(result.data(), ctx.dev_c, bytes, cudaMemcpyDeviceToHost);
+    cudaMemcpyAsync(result.data(), ctx.dev_c, bytes, cudaMemcpyDeviceToHost, ctx.stream);
+    cudaStreamSynchronize(ctx.stream);
     return result;
 }
