@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <atomic>
 #include <cstddef>
-#include <memory>
 #include <thread>
 
 namespace {
@@ -68,13 +67,18 @@ struct Context {
     }
 
     void Release() {
-        if (capacity == 0) {
-            return;
+        if (pinned_out != nullptr) {
+            clEnqueueUnmapMemObject(upload, host_out, pinned_out, 0, nullptr, nullptr);
+            clFinish(upload);
         }
-        clEnqueueUnmapMemObject(upload, host_out, pinned_out, 0, nullptr, nullptr);
-        clFinish(upload);
-        clReleaseMemObject(host_out);
-        clReleaseMemObject(device);
+        if (host_out != nullptr) {
+            clReleaseMemObject(host_out);
+        }
+        if (device != nullptr) {
+            clReleaseMemObject(device);
+        }
+        host_out = device = nullptr;
+        pinned_out = nullptr;
         capacity = 0;
     }
 
@@ -93,10 +97,10 @@ struct Context {
 };
 
 Context& GetContext(int platform) {
-    static std::unique_ptr<Context> context;
-    if (!context || context->platform != platform) {
-        context.reset();
-        context = std::make_unique<Context>(platform);
+    static Context* context = nullptr;
+    if (context == nullptr || context->platform != platform) {
+        delete context;
+        context = new Context(platform);
     }
     return *context;
 }
@@ -112,6 +116,23 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 
     Context& ctx = GetContext(platform);
     ctx.Reserve(n);
+    const size_t global = ((n + 3) / 4 + kGroup - 1) / kGroup * kGroup;
+    const cl_ulong count = n;
+    const cl_ulong zero = 0;
+
+    if (ctx.pinned_out == nullptr) {
+        output.resize(n);
+        clEnqueueWriteBuffer(ctx.upload, ctx.device, CL_FALSE, 0, n * sizeof(float), input.data(), 0, nullptr,
+                             nullptr);
+        clSetKernelArg(ctx.kernel, 0, sizeof(cl_mem), &ctx.device);
+        clSetKernelArg(ctx.kernel, 1, sizeof(zero), &zero);
+        clSetKernelArg(ctx.kernel, 2, sizeof(count), &count);
+        clEnqueueNDRangeKernel(ctx.upload, ctx.kernel, 1, nullptr, &global, &kGroup, 0, nullptr, nullptr);
+        clEnqueueReadBuffer(ctx.upload, ctx.device, CL_TRUE, 0, n * sizeof(float), output.data(), 0, nullptr,
+                            nullptr);
+        return output;
+    }
+
     const size_t chunks = (n + kChunk - 1) / kChunk;
     std::vector<cl_event> computed(chunks);
     std::vector<cl_event> downloaded(chunks);
@@ -133,14 +154,14 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
         const cl_ulong begin = c * kChunk;
         const cl_ulong end = std::min(n, c * kChunk + kChunk);
         const size_t bytes = (end - begin) * sizeof(float);
-        const size_t global = ((end - begin + 3) / 4 + kGroup - 1) / kGroup * kGroup;
+        const size_t items = ((end - begin + 3) / 4 + kGroup - 1) / kGroup * kGroup;
 
         clEnqueueWriteBuffer(ctx.upload, ctx.device, CL_FALSE, begin * sizeof(float), bytes, input.data() + begin, 0,
                              nullptr, nullptr);
         clSetKernelArg(ctx.kernel, 0, sizeof(cl_mem), &ctx.device);
         clSetKernelArg(ctx.kernel, 1, sizeof(begin), &begin);
         clSetKernelArg(ctx.kernel, 2, sizeof(end), &end);
-        clEnqueueNDRangeKernel(ctx.upload, ctx.kernel, 1, nullptr, &global, &kGroup, 0, nullptr, &computed[c]);
+        clEnqueueNDRangeKernel(ctx.upload, ctx.kernel, 1, nullptr, &items, &kGroup, 0, nullptr, &computed[c]);
         clFlush(ctx.upload);
         clEnqueueReadBuffer(ctx.download, ctx.device, CL_FALSE, begin * sizeof(float), bytes, ctx.pinned_out + begin, 1,
                             &computed[c], &downloaded[c]);
