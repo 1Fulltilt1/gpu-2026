@@ -466,13 +466,13 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 |3823B1PE3|borunov_vladislav|0.2710|5|
 |3823B1PE2|zorin_danila_artemovich|0.4702|4|
 |3823B1PE1|morozov_nikita|0.4711|1|
+|3823B1PE3|afanasyev_alexandr|0.4714|9|
 |3823B1PE4|baranov_andrey|0.4798|6|
 |3823B1PE4|tsarkov_klim|0.4829|5|
 |3823B1PE3|ermakov_alexei|0.4845|6|
 |3823B1PE4|zaharov_gleb|0.4929|1|
 |3823B1PE4|romanov_michail|0.4937|7|
 |**REF**|**REF**|**0.5440**|**-**|
-|3823B1PE3|afanasyev_alexandr|BUILD FAILED|-|
 |3823B1PE4|urin_oleg|TEST FAILED|-|
 
 ## 2_gelu_cuda (134217728 elements)
@@ -805,13 +805,13 @@ Passed: 4
 ## 3823B1PE3
 |Group|Name|Passed|Score|
 |-----|----|------|-----|
-|3823B1PE3|afanasyev_alexandr|0/8|0|
+|3823B1PE3|afanasyev_alexandr|1/8|49|
 |3823B1PE3|balchunayte_zlata|1/8|55|
 |3823B1PE3|batkov_filipp|4/8|229|
 |3823B1PE3|bortsova_angelina|**8/8**|**478**|
 |3823B1PE3|borunov_vladislav|3/8|167|
 |3823B1PE3|dergachev_arseniy|**8/8**|**498**|
-|3823B1PE3|ermakov_alexei|7/8|412|
+|3823B1PE3|ermakov_alexei|7/8|411|
 |3823B1PE3|marin_lev|**8/8**|**476**|
 |3823B1PE3|rastvorov_kirill|3/8|171|
 

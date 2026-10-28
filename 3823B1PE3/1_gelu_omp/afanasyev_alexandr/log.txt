@@ -1,5 +1,0 @@
-/home/crazyproger/sandbox/gpu-2026/3823B1PE3/1_gelu_omp/afanasyev_alexandr/gelu_omp.cpp: In function ‘float {anonymous}::GeluScalar(float)’:
-/home/crazyproger/sandbox/gpu-2026/3823B1PE3/1_gelu_omp/afanasyev_alexandr/gelu_omp.cpp:17:36: error: ‘tanhf’ is not a member of ‘std’; did you mean ‘tanh’?
-   17 |     return 0.5f * x * (1.0f + std::tanhf(tanh_arg));
-      |                                    ^~~~~
-      |                                    tanh
