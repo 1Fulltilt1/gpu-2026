@@ -8,7 +8,7 @@ __device__ __forceinline__ float gelu_func(float x) {
     const float sqrt_2_over_pi = 0.7978845608f;
     const float coeff = 0.044715f;
     float inner = sqrt_2_over_pi * (x + coeff * x * x * x);
-    return x / (1.0f + __expf(-2.0f * inner));
+    return x / (1.0f + expf(-2.0f * inner));
 }
 
 __global__ void gelu_fast_kernel(const float4* __restrict__ input, float4* __restrict__ output, size_t n_v4, size_t v4_offset) {
@@ -38,9 +38,6 @@ std::vector<float> GeluCUDA(const std::vector<float>& input) {
     std::vector<float> output(n);
     size_t bytes = n * sizeof(float);
 
-    cudaHostRegister((void*)input.data(), bytes, cudaHostRegisterReadOnly);
-    cudaHostRegister((void*)output.data(), bytes, cudaHostRegisterDefault);
-
     float *d_in = nullptr, *d_out = nullptr;
     cudaMalloc(&d_in, bytes);
     cudaMalloc(&d_out, bytes);
@@ -52,6 +49,7 @@ std::vector<float> GeluCUDA(const std::vector<float>& input) {
     }
 
     size_t chunkSize = (n + NUM_STREAMS - 1) / NUM_STREAMS;
+    chunkSize = ((chunkSize + 3) / 4) * 4;
     int threadsPerBlock = 256;
 
     for (int i = 0; i < NUM_STREAMS; ++i) {
@@ -97,9 +95,6 @@ std::vector<float> GeluCUDA(const std::vector<float>& input) {
 
     cudaFree(d_in);
     cudaFree(d_out);
-
-    cudaHostUnregister((void*)input.data());
-    cudaHostUnregister((void*)output.data());
 
     return output;
 }
