@@ -720,6 +720,7 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 |3823B1FI1|dorofeev_ivan|RUN FAILED|-|
 |3823B1PE3|ermakov_alexei|TEST FAILED|-|
 |3823B1PE1|shilin_nikita|TEST FAILED|-|
+|3823B1PE1|ivanova_polina|TEST FAILED|-|
 |3823B1PE2|sinev_artem|TEST FAILED|-|
 
 # Tasks Done
