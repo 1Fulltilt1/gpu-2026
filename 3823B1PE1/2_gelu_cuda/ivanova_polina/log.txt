@@ -1,5 +1,0 @@
-/usr/bin/ld: /tmp/tmpxft_0000064c_00000000-12_main.o: in function `main':
-main.cpp:(.text.startup+0x8a): undefined reference to `GeluCUDA(std::vector<float, std::allocator<float> > const&)'
-/usr/bin/ld: main.cpp:(.text.startup+0x21f): undefined reference to `GeluCUDA(std::vector<float, std::allocator<float> > const&)'
-/usr/bin/ld: main.cpp:(.text.startup+0x284): undefined reference to `GeluCUDA(std::vector<float, std::allocator<float> > const&)'
-collect2: error: ld returned 1 exit status
