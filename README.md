@@ -713,6 +713,7 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 ## 8_gelu_ocl (134217728 elements)
 |Group|Name|Result|Rank|
 |-----|----|------|----|
+|3823B1FI1|dorofeev_ivan|0.1984|2|
 |**FAST**|**FAST**|**0.2036**|**-**|
 |3823B1FI1|zenin_anton|0.2050|1|
 |3823B1PE4|peryashkin_vasily|0.2377|3|
@@ -733,7 +734,6 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 |**REF**|**REF**|**0.3289**|**-**|
 |3823B1PE1|kondrashova_victoria|0.4422|6|
 |3823B1PE2|zorin_danila_artemovich|0.4599|3|
-|3823B1FI1|dorofeev_ivan|RUN FAILED|-|
 |3823B1PE3|ermakov_alexei|TEST FAILED|-|
 |3823B1PE1|shilin_nikita|TEST FAILED|-|
 |3823B1PE1|ivanova_polina|TEST FAILED|-|
@@ -743,12 +743,12 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
 ## 3823B1FI1
 |Group|Name|Passed|Score|
 |-----|----|------|-----|
-|3823B1FI1|dorofeev_ivan|7/8|440|
+|3823B1FI1|dorofeev_ivan|**8/8**|**503**|
 |3823B1FI1|kosolapov_vitaliy|1/8|60|
 |3823B1FI1|krykov_egor|2/8|121|
-|3823B1FI1|zenin_anton|**8/8**|**503**|
+|3823B1FI1|zenin_anton|**8/8**|**502**|
 
-Passed: 1
+Passed: 2
 
 ## 3823B1FI2
 |Group|Name|Passed|Score|
@@ -831,7 +831,7 @@ Passed: 3
 
 Passed: 3
 
-**Total Passed: 18**
+**Total Passed: 19**
 
 ---
 *Maximum Score: 512 (64 per task)*
