@@ -5,20 +5,20 @@
 #include <stdexcept>
 #include <vector>
 
-static const char* kGeluVectorKernelSource = R"(
-__kernel void gelu_vector_kernel(__global const float4* input, __global float4* output, const int num_vecs) {
+static const char* kGeluKernelSource = R"(
+__kernel void gelu_kernel(__global const float* input, __global float* output, const int n) {
     int idx = get_global_id(0);
-    if (idx < num_vecs) {
-        float4 x = input[idx];
-        float4 inner = 0.7978845608028654f * (x + 0.044715f * x * x * x);
-        float4 exp_val = native_exp(2.0f * inner);
-        float4 t = (exp_val - 1.0f) / (exp_val + 1.0f);
+    if (idx < n) {
+        float x = input[idx];
+        float inner = 0.7978845608028654f * (x + 0.044715f * x * x * x);
+        float exp_val = native_exp(2.0f * inner);
+        float t = (exp_val - 1.0f) / (exp_val + 1.0f);
         output[idx] = 0.5f * x * (1.0f + t);
     }
 }
 )";
 
-struct FastOpenCLWorkspace {
+struct OpenCLWorkspace {
     cl_platform_id platform_id = nullptr;
     cl_device_id device_id = nullptr;
     cl_context context = nullptr;
@@ -29,20 +29,37 @@ struct FastOpenCLWorkspace {
     cl_mem d_input = nullptr;
     cl_mem d_output = nullptr;
     size_t capacity_bytes = 0;
+    int active_platform = -1;
     bool initialized = false;
 
     void init(int platform_index, size_t required_bytes) {
-        if (!initialized) {
+        // Переинициализируем, если сменился индекс платформы или еще не запускались
+        if (!initialized || active_platform != platform_index) {
+            if (kernel) { clReleaseKernel(kernel); kernel = nullptr; }
+            if (program) { clReleaseProgram(program); program = nullptr; }
+            if (queue) { clReleaseCommandQueue(queue); queue = nullptr; }
+            if (context) { clReleaseContext(context); context = nullptr; }
+            if (d_input) { clReleaseMemObject(d_input); d_input = nullptr; }
+            if (d_output) { clReleaseMemObject(d_output); d_output = nullptr; }
+            capacity_bytes = 0;
+
             cl_uint num_platforms = 0;
             clGetPlatformIDs(0, nullptr, &num_platforms);
             if (num_platforms == 0) throw std::runtime_error("No OpenCL platforms found.");
 
             std::vector<cl_platform_id> platforms(num_platforms);
             clGetPlatformIDs(num_platforms, platforms.data(), nullptr);
+            
+            if (platform_index < 0 || static_cast<cl_uint>(platform_index) >= num_platforms) {
+                platform_index = 0;
+            }
             platform_id = platforms[platform_index];
 
             cl_device_id device;
-            clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_GPU, 1, &device, nullptr);
+            cl_int err = clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_GPU, 1, &device, nullptr);
+            if (err != CL_SUCCESS) {
+                clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_CPU, 1, &device, nullptr);
+            }
             device_id = device;
 
             context = clCreateContext(nullptr, 1, &device_id, nullptr, nullptr, nullptr);
@@ -51,10 +68,11 @@ struct FastOpenCLWorkspace {
 #else
             queue = clCreateCommandQueue(context, device_id, 0, nullptr);
 #endif
-            program = clCreateProgramWithSource(context, 1, &kGeluVectorKernelSource, nullptr, nullptr);
+            program = clCreateProgramWithSource(context, 1, &kGeluKernelSource, nullptr, nullptr);
             clBuildProgram(program, 1, &device_id, "-cl-fast-relaxed-math", nullptr, nullptr);
             
-            kernel = clCreateKernel(program, "gelu_vector_kernel", nullptr);
+            kernel = clCreateKernel(program, "gelu_kernel", nullptr);
+            active_platform = platform_index;
             initialized = true;
         }
 
@@ -69,7 +87,7 @@ struct FastOpenCLWorkspace {
     }
 };
 
-static FastOpenCLWorkspace g_fast_ws;
+static OpenCLWorkspace g_ws;
 
 std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
     if (input.empty()) return {};
@@ -77,24 +95,23 @@ std::vector<float> GeluOCL(const std::vector<float>& input, int platform) {
     size_t n = input.size();
     size_t bytes = n * sizeof(float);
 
-    g_fast_ws.init(platform, bytes);
+    g_ws.init(platform, bytes);
 
-    clEnqueueWriteBuffer(g_fast_ws.queue, g_fast_ws.d_input, CL_FALSE, 0, bytes, input.data(), 0, nullptr, nullptr);
+    clEnqueueWriteBuffer(g_ws.queue, g_ws.d_input, CL_TRUE, 0, bytes, input.data(), 0, nullptr, nullptr);
 
-    int num_vecs = static_cast<int>(n / 4);
-    clSetKernelArg(g_fast_ws.kernel, 0, sizeof(cl_mem), &g_fast_ws.d_input);
-    clSetKernelArg(g_fast_ws.kernel, 1, sizeof(cl_mem), &g_fast_ws.d_output);
-    clSetKernelArg(g_fast_ws.kernel, 2, sizeof(int), &num_vecs);
+    int size_arg = static_cast<int>(n);
+    clSetKernelArg(g_ws.kernel, 0, sizeof(cl_mem), &g_ws.d_input);
+    clSetKernelArg(g_ws.kernel, 1, sizeof(cl_mem), &g_ws.d_output);
+    clSetKernelArg(g_ws.kernel, 2, sizeof(int), &size_arg);
 
     size_t local_work_size = 256;
-    size_t global_work_size = ((num_vecs + local_work_size - 1) / local_work_size) * local_work_size;
+    size_t global_work_size = ((n + local_work_size - 1) / local_work_size) * local_work_size;
 
-    clEnqueueNDRangeKernel(g_fast_ws.queue, g_fast_ws.kernel, 1, nullptr, 
+    clEnqueueNDRangeKernel(g_ws.queue, g_ws.kernel, 1, nullptr, 
                            &global_work_size, &local_work_size, 0, nullptr, nullptr);
 
     std::vector<float> output(n);
-
-    clEnqueueReadBuffer(g_fast_ws.queue, g_fast_ws.d_output, CL_TRUE, 0, 
+    clEnqueueReadBuffer(g_ws.queue, g_ws.d_output, CL_TRUE, 0, 
                         bytes, output.data(), 0, nullptr, nullptr);
 
     return output;
