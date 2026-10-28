@@ -31,7 +31,7 @@ __global__ void gelu_scalar_tail_kernel(const float* __restrict__ input, float* 
     }
 }
 
-std::vector<float> GeluCUDAOpt(const std::vector<float>& input) {
+std::vector<float> GeluCUDA(const std::vector<float>& input) {
     size_t n = input.size();
     if (n == 0) return {};
 
